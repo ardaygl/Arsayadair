@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ada / Parsel ve Konum Sorgula</title>
+  
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; }
+    body { display: flex; height: 100vh; overflow: hidden; background-color: #f8fafc; }
+    #sidebar { width: 380px; height: 100%; background: #ffffff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; box-shadow: 2px 0 10px rgba(0,0,0,0.05); z-index: 1000; overflow-y: auto; }
+    .panel-header { padding: 16px 20px; border-bottom: 1px solid #f1f5f9; background: #0f172a; color: #ffffff; display: flex; justify-content: space-between; align-items: center; }
+    .panel-header h2 { font-size: 1.1rem; font-weight: 600; }
+    .back-btn { color: #94a3b8; text-decoration: none; font-size: 0.85rem; }
+    .back-btn:hover { color: #ffffff; }
+    .panel-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    label { font-size: 0.8rem; font-weight: 600; color: #475569; }
+    select, input { padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; outline: none; background: #ffffff; }
+    select:focus, input:focus { border-color: #2563eb; }
+    select:disabled, input:disabled { background: #f1f5f9; cursor: not-allowed; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .submit-btn { margin-top: 6px; padding: 11px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
+    .submit-btn:hover { background: #1d4ed8; }
+    .submit-btn:disabled { background: #94a3b8; cursor: not-allowed; }
+    #info-card { display: none; border-top: 1px solid #e2e8f0; padding: 18px 20px; background: #f8fafc; }
+    #info-card h3 { font-size: 0.95rem; margin-bottom: 10px; color: #0f172a; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; font-size: 0.82rem; }
+    .info-item span:first-child { color: #64748b; display: block; font-size: 0.75rem; }
+    .info-item span:last-child { font-weight: 600; color: #1e293b; }
+    #map { flex: 1; height: 100%; }
+  </style>
+</head>
+<body>
+
+  <aside id="sidebar">
+    <div class="panel-header">
+      <h2>Parsel Sorgulama</h2>
+      <a href="/" class="back-btn">← Menü</a>
+    </div>
+
+    <div class="panel-body">
+      <div class="form-group">
+        <label for="ilSelect">İl</label>
+        <select id="ilSelect">
+          <option value="">İller Yükleniyor...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="ilceSelect">İlçe</label>
+        <select id="ilceSelect" disabled>
+          <option value="">Önce İl Seçiniz</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="mahalleSelect">Mahalle</label>
+        <select id="mahalleSelect" disabled>
+          <option value="">Önce İlçe Seçiniz</option>
+        </select>
+      </div>
+
+      <div class="row">
+        <div class="form-group">
+          <label for="adaInput">Ada</label>
+          <input type="text" id="adaInput" placeholder="Örn: 101" disabled />
+        </div>
+        <div class="form-group">
+          <label for="parselInput">Parsel</label>
+          <input type="text" id="parselInput" placeholder="Örn: 5" disabled />
+        </div>
+      </div>
+
+      <button id="sorgulaBtn" class="submit-btn" disabled>Parseli Sorgula</button>
+    </div>
+
+    <div id="info-card">
+      <h3>Parsel Detayları</h3>
+      <div class="info-grid">
+        <div class="info-item"><span>İl</span><span id="info-il">-</span></div>
+        <div class="info-item"><span>İlçe</span><span id="info-ilce">-</span></div>
+        <div class="info-item"><span>Mahalle</span><span id="info-mahalle">-</span></div>
+        <div class="info-item"><span>Ada / Parsel</span><span id="info-adaparsel">-</span></div>
+        <div class="info-item"><span>Alan</span><span id="info-alan">-</span></div>
+        <div class="info-item"><span>Nitelik</span><span id="info-nitelik">-</span></div>
+        <div class="info-item"><span>Pafta</span><span id="info-pafta">-</span></div>
+        <div class="info-item"><span>Mevkii</span><span id="info-mevkii">-</span></div>
+      </div>
+    </div>
+  </aside>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    const map = L.map('map', { zoomControl: false }).setView([39.0, 35.0], 6);
+    L.control.zoom({ position: 'topright' }).addTo(map);
+
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
+    const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 });
+
+    L.control.layers({
+      "Sokak Haritası (OSM)": osm,
+      "Uydu Görüntüsü (Esri)": esri
+    }, null, { position: 'topright' }).addTo(map);
+
+    let currentPolygon = null;
+    let clickMarker = null;
+
+    const ilSelect = document.getElementById('ilSelect');
+    const ilceSelect = document.getElementById('ilceSelect');
+    const mahalleSelect = document.getElementById('mahalleSelect');
+    const adaInput = document.getElementById('adaInput');
+    const parselInput = document.getElementById('parselInput');
+    const sorgulaBtn = document.getElementById('sorgulaBtn');
+    const infoCard = document.getElementById('info-card');
+
+    // 1. İlleri Getir
+    async function loadIller() {
+      try {
+        const res = await fetch('/api/iller');
+        const iller = await res.json();
+        ilSelect.innerHTML = '<option value="">İl Seçiniz...</option>';
+        iller.forEach(il => {
+          const opt = document.createElement('option');
+          opt.value = il.id;
+          opt.textContent = il.ad;
+          ilSelect.appendChild(opt);
+        });
+      } catch (err) {
+        ilSelect.innerHTML = '<option value="">İller Yüklenemedi</option>';
+      }
+    }
+    loadIller();
+
+    // 2. İl Seçilince İlçeleri Getir
+    ilSelect.addEventListener('change', async () => {
+      const ilId = ilSelect.value;
+      resetSelect(ilceSelect, 'İlçe Yükleniyor...');
+      resetSelect(mahalleSelect, 'Önce İlçe Seçiniz');
+      toggleInputs(false);
+
+      if (!ilId) return resetSelect(ilceSelect, 'Önce İl Seçiniz');
+
+      try {
+        const res = await fetch(`/api/ilceler/${ilId}`);
+        if (!res.ok) throw new Error();
+        const ilceler = await res.json();
+        ilceSelect.innerHTML = '<option value="">İlçe Seçiniz...</option>';
+        ilceSelect.disabled = false;
+        ilceler.forEach(ilce => {
+          const opt = document.createElement('option');
+          opt.value = ilce.id;
+          opt.textContent = ilce.ad;
+          ilceSelect.appendChild(opt);
+        });
+      } catch (e) {
+        resetSelect(ilceSelect, 'İlçeler Yüklenemedi (Kota / Hata)');
+      }
+    });
+
+    // 3. İlçe Seçilince Mahalleleri Getir
+    ilceSelect.addEventListener('change', async () => {
+      const ilceId = ilceSelect.value;
+      resetSelect(mahalleSelect, 'Mahalle Yükleniyor...');
+      toggleInputs(false);
+
+      if (!ilceId) return resetSelect(mahalleSelect, 'Önce İlçe Seçiniz');
+
+      try {
+        const res = await fetch(`/api/mahalleler/${ilceId}`);
+        if (!res.ok) throw new Error();
+        const mahalleler = await res.json();
+        mahalleSelect.innerHTML = '<option value="">Mahalle Seçiniz...</option>';
+        mahalleSelect.disabled = false;
+        mahalleler.forEach(m => {
+          const opt = document.createElement('option');
+          opt.value = m.id;
+          opt.textContent = m.ad;
+          mahalleSelect.appendChild(opt);
+        });
+      } catch (e) {
+        resetSelect(mahalleSelect, 'Mahalleler Yüklenemedi');
+      }
+    });
+
+    mahalleSelect.addEventListener('change', () => toggleInputs(!!mahalleSelect.value));
+
+    function resetSelect(el, txt) { el.innerHTML = `<option value="">${txt}</option>`; el.disabled = true; }
+    function toggleInputs(en) { adaInput.disabled = !en; parselInput.disabled = !en; sorgulaBtn.disabled = !en; }
+
+    // 4. Parsel Çizimi
+    function renderParcel(data) {
+      if (currentPolygon) map.removeLayer(currentPolygon);
+
+      const feature = data.type === "FeatureCollection" ? data.features[0] : (data.geometry ? data : null);
+      if (!feature || !feature.geometry) {
+        alert("Parsel geometrisi bulunamadı.");
+        return;
+      }
+
+      currentPolygon = L.geoJSON(feature, {
+        style: { color: '#2563eb', weight: 3, fillColor: '#3b82f6', fillOpacity: 0.35 }
+      }).addTo(map);
+
+      map.fitBounds(currentPolygon.getBounds(), { padding: [50, 50] });
+
+      const p = feature.properties || {};
+      const ada = p.adaNo || p.ada || adaInput.value || '-';
+      const parsel = p.parselNo || p.parsel || parselInput.value || '-';
+
+      document.getElementById('info-il').textContent = p.ilAd || ilSelect.options[ilSelect.selectedIndex]?.text || '-';
+      document.getElementById('info-ilce').textContent = p.ilceAd || ilceSelect.options[ilceSelect.selectedIndex]?.text || '-';
+      document.getElementById('info-mahalle').textContent = p.mahalleAd || mahalleSelect.options[mahalleSelect.selectedIndex]?.text || '-';
+      document.getElementById('info-adaparsel').textContent = `${ada} / ${parsel}`;
+      document.getElementById('info-alan').textContent = p.alan ? `${p.alan} m²` : '-';
+      document.getElementById('info-nitelik').textContent = p.nitelik || '-';
+      document.getElementById('info-pafta').textContent = p.pafta || '-';
+      document.getElementById('info-mevkii').textContent = p.mevkii || '-';
+      infoCard.style.display = 'block';
+
+      return { ada, parsel, alan: p.alan, p };
+    }
+
+    // 5. Butonla Sorgula
+    sorgulaBtn.addEventListener('click', async () => {
+      const mahalleId = mahalleSelect.value;
+      const ada = adaInput.value.trim() || "0";
+      const parsel = parselInput.value.trim();
+
+      if (!parsel) return alert("Lütfen parsel numarasını giriniz.");
+
+      sorgulaBtn.disabled = true;
+      sorgulaBtn.textContent = "Sorgulanıyor...";
+
+      try {
+        const res = await fetch(`/api/parsel/${mahalleId}/${ada}/${parsel}`);
+        if (!res.ok) throw new Error("Parsel bulunamadı veya TKGM sorgu limitiniz aşıldı.");
+        const data = await res.json();
+        renderParcel(data);
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        sorgulaBtn.disabled = false;
+        sorgulaBtn.textContent = "Parseli Sorgula";
+      }
+    });
+
+    // 6. Harita Tıklama
+    map.on('click', async (e) => {
+      const lat = e.latlng.lat.toFixed(6);
+      const lng = e.latlng.lng.toFixed(6);
+
+      if (clickMarker) map.removeLayer(clickMarker);
+      clickMarker = L.popup()
+        .setLatLng(e.latlng)
+        .setContent(`<div style="padding: 6px;">📍 ${lat}, ${lng}<br><span style="color:#2563eb;">Parsel sorgulanıyor...</span></div>`)
+        .openOn(map);
+
+      try {
+        const res = await fetch(`/api/parsel-nokta/${lat}/${lng}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        const info = renderParcel(data);
+        clickMarker.setContent(`<b>${info.p.ilAd || ''} / ${info.p.ilceAd || ''}</b><br>Ada: ${info.ada} | Parsel: ${info.parsel}`);
+      } catch (err) {
+        clickMarker.setContent('<div style="color:red; padding:4px;">Bu noktada parsel bulunamadı.</div>');
+      }
+    });
+  </script>
+</body>
+</html>

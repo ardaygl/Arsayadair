@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Arsa & Parsel Portalı</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #0f172a; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+    .container { max-width: 500px; width: 90%; background: #1e293b; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5); text-align: center; border: 1px solid #334155; }
+    h1 { font-size: 26px; margin-bottom: 8px; color: #38bdf8; }
+    p { color: #94a3b8; font-size: 15px; margin-bottom: 30px; }
+    .menu-item { display: block; text-decoration: none; padding: 18px 20px; border-radius: 12px; margin-bottom: 15px; font-weight: 600; font-size: 16px; transition: all 0.2s ease; }
+    .active-btn { background: #2563eb; color: #ffffff; border: 1px solid #3b82f6; }
+    .active-btn:hover { background: #1d4ed8; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(37,99,235,0.4); }
+    .disabled-btn { background: #334155; color: #64748b; cursor: not-allowed; border: 1px dashed #475569; }
+    .badge { display: inline-block; font-size: 11px; background: #475569; color: #cbd5e1; padding: 2px 8px; border-radius: 20px; margin-left: 8px; vertical-align: middle; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Parsel Yönetim Portalı</h1>
+    <p>İşlem yapmak istediğiniz aracı seçin</p>
+    <a href="sorgu.html" class="menu-item active-btn">📍 Ada / Parsel Sorgula</a>
+    <div class="menu-item disabled-btn">🏢 3D Bina Modelleme <span class="badge">Yakında</span></div>
+    <div class="menu-item disabled-btn">📊 İmar Durumu Analizi <span class="badge">Yakında</span></div>
+  </div>
+</body>
+</html>
