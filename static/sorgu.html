@@ -5,9 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Parsel Sorgulama - Arsaya Dair</title>
 
-  <!-- Leaflet Harita CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -30,8 +28,6 @@
       height: 100%;
       z-index: 1;
     }
-
-    /* Sol Menü */
     .sidebar {
       position: absolute;
       top: 16px;
@@ -138,8 +134,6 @@
       background: #e2e8f0;
       color: #0f172a;
     }
-
-    /* Parsel Üzerindeki Ada / Parsel Etiketi */
     .parcel-label {
       background: rgba(15, 23, 42, 0.9) !important;
       color: #ffffff !important;
@@ -157,8 +151,6 @@
     .leaflet-tooltip-pane .parcel-label::before {
       border-top-color: rgba(15, 23, 42, 0.9) !important;
     }
-
-    /* Popup Tasarımı */
     .tkgm-popup {
       font-size: 13px;
       min-width: 210px;
@@ -189,8 +181,6 @@
       font-weight: 600;
       cursor: pointer;
     }
-
-    /* Parsel Detay Kartı (Modal) */
     #detailModal {
       position: absolute;
       bottom: 20px;
@@ -223,19 +213,17 @@
 </head>
 <body>
 
-  <!-- Sol Menü -->
   <div class="sidebar">
     <div class="sidebar-header">
       <h2>Parsel Sorgulama</h2>
-      <span style="font-size: 11px; background: #1e293b; padding: 4px 8px; border-radius: 6px; color: #38bdf8;">Doğrudan TKGM</span>
+      <span style="font-size: 11px; background: #1e293b; padding: 4px 8px; border-radius: 6px; color: #38bdf8;">TKGM Canlı</span>
     </div>
 
     <div class="sidebar-content">
       <div class="info-badge">
-        💡 <b>İpucu:</b> Sorgular doğrudan kendi internet bağlantınız üzerinden TKGM'ye iletilir. Haritada herhangi bir yere tıklayarak ada/parseli görebilirsiniz.
+        💡 <b>İpucu:</b> Haritada herhangi bir yere tıklayarak ada/parsel sınırlarını anında görebilirsiniz.
       </div>
 
-      <!-- İl -->
       <div class="form-group">
         <label for="ilSelect">İl</label>
         <select id="ilSelect" class="form-control">
@@ -243,7 +231,6 @@
         </select>
       </div>
 
-      <!-- İlçe -->
       <div class="form-group">
         <label for="ilceSelect">İlçe</label>
         <select id="ilceSelect" class="form-control" disabled>
@@ -251,7 +238,6 @@
         </select>
       </div>
 
-      <!-- Mahalle -->
       <div class="form-group">
         <label for="mahalleSelect">Mahalle</label>
         <select id="mahalleSelect" class="form-control" disabled>
@@ -259,7 +245,6 @@
         </select>
       </div>
 
-      <!-- Ada / Parsel -->
       <div class="form-row">
         <div class="form-group" style="flex: 1;">
           <label for="adaInput">Ada</label>
@@ -281,7 +266,6 @@
     </div>
   </div>
 
-  <!-- Detay Kartı (Modal) -->
   <div id="detailModal">
     <div class="modal-header">
       <span>Parsel Detay Bilgileri</span>
@@ -290,17 +274,14 @@
     <div class="modal-body" id="detailModalBody"></div>
   </div>
 
-  <!-- Harita -->
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // Kullanıcının Kendi IP'siyle Bağlandığı Resmi TKGM API'si (parselindir.com altyapısı)
-    const TKGM_API = "https://cbsapi.tkgm.gov.tr/megsiswebapi.v3.1/api";
+    const TKGM_DIRECT_API = "https://cbsapi.tkgm.gov.tr/megsiswebapi.v3.1/api";
 
-    // 1. Sadece Türkiye ile Sınırlandırılmış Harita
+    // 1. Harita Sınırları (Türkiye)
     const turkeyBounds = L.latLngBounds(
       L.latLng(35.0, 25.0),
       L.latLng(42.8, 45.2)
@@ -316,7 +297,6 @@
 
     L.control.zoom({ position: 'topright' }).addTo(map);
 
-    // Uydu ve Sokak Katmanları
     const googleSatellite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
       maxZoom: 20,
       attribution: 'Google Uydu'
@@ -332,18 +312,15 @@
       "Sokak Haritası": osmStreet
     }, null, { position: 'topright' }).addTo(map);
 
-    // Çizim Katmanları
     const adminBoundaryGroup = L.featureGroup().addTo(map);
     const parcelLayerGroup = L.featureGroup().addTo(map);
-    const drawnParcelsMap = new Map(); // Aynı parselin tekrar eklenmesini önler
+    const drawnParcelsMap = new Map();
     let clickMarker = null;
 
-    // Veri Havuzları
     let illerList = [];
     let ilcelerList = [];
     let mahallelerList = [];
 
-    // Elementler
     const ilSelect = document.getElementById('ilSelect');
     const ilceSelect = document.getElementById('ilceSelect');
     const mahalleSelect = document.getElementById('mahalleSelect');
@@ -354,12 +331,10 @@
     const detailModal = document.getElementById('detailModal');
     const detailModalBody = document.getElementById('detailModalBody');
 
-    // Türkçe A-Z Alfabetik Sıralama Fonksiyonu (Ç, İ, Ö, Ş, Ü harflerini doğru dizer)
     function sortTurkish(list) {
       return list.sort((a, b) => (a.ad || a.text || '').localeCompare((b.ad || b.text || ''), 'tr', { sensitivity: 'base' }));
     }
 
-    // Güvenli Alan (m²) Formatlayıcı (Asla NaN yazmaz)
     function formatAlan(rawAlan) {
       if (!rawAlan) return '';
       let str = String(rawAlan).replace('m²', '').trim();
@@ -371,7 +346,7 @@
       return str;
     }
 
-    // 2. DÜZ ÇİZGİLİ İdari Sınır Çizme Fonksiyonu
+    // 2. Düz Çizgili İdari Sınır
     function showAdminBoundary(geom, maxZoom) {
       if (!geom) return;
       try {
@@ -392,25 +367,18 @@
           duration: 1.2
         });
       } catch (e) {
-        console.error('Sınır çizme hatası:', e);
+        console.error(e);
       }
     }
 
-    // 3. İlleri Getir (Kullanıcı Doğrudan TKGM'den Alır)
+    // 3. İlleri Getir (Asla patlamaz)
     async function loadIller() {
       try {
-        const res = await fetch('https://parselsorgu.tkgm.gov.tr/app/modules/administrativeQuery/data/ilListe.json');
+        let res = await fetch('/api/iller');
         if (!res.ok) throw new Error();
-        const data = await res.json();
+        let data = await res.json();
         
-        const rawIller = (data.features || []).map(f => ({
-          id: f.properties.id,
-          ad: f.properties.text,
-          geometry: f.geometry
-        }));
-
-        illerList = sortTurkish(rawIller);
-        
+        illerList = sortTurkish(data);
         ilSelect.innerHTML = '<option value="">İl Seçiniz..</option>';
         illerList.forEach(il => {
           const opt = document.createElement('option');
@@ -419,12 +387,12 @@
           ilSelect.appendChild(opt);
         });
       } catch (err) {
-        console.error('İller yüklenemedi:', err);
+        console.error('İller yükleme hatası:', err);
       }
     }
     loadIller();
 
-    // 4. İl Seçimi -> Doğrudan Kullanıcı IP'siyle İlçeleri Getir
+    // 4. İl Seçimi (Önce Doğrudan Kullanıcı IP'si, Olmazsa Sunucu)
     ilSelect.addEventListener('change', async () => {
       const ilId = ilSelect.value;
       ilceSelect.innerHTML = '<option value="">Yükleniyor...</option>';
@@ -443,14 +411,25 @@
         showAdminBoundary(seciliIl.geometry, 10);
       }
 
+      let data = null;
+      // 1. Dene: Doğrudan kullanıcının IP'sinden TKGM'ye sor
       try {
-        const res = await fetch(`${TKGM_API}/idariYapi/ilceListe/${ilId}`);
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        
-        const rawIlceler = (data.features || []).map(f => ({
-          id: f.properties.id,
-          ad: f.properties.text,
+        const res = await fetch(`${TKGM_DIRECT_API}/idariYapi/ilceListe/${ilId}`);
+        if (res.ok) data = await res.json();
+      } catch (e) {}
+
+      // 2. Dene: Kullanıcıda engellenirse sunucudan sor
+      if (!data) {
+        try {
+          const res = await fetch(`/api/ilceler/${ilId}`);
+          if (res.ok) data = await res.json();
+        } catch (e) {}
+      }
+
+      if (data) {
+        const rawIlceler = (data.features || data || []).map(f => ({
+          id: f.properties ? f.properties.id : f.id,
+          ad: f.properties ? f.properties.text : f.ad,
           geometry: f.geometry
         }));
 
@@ -464,12 +443,12 @@
           ilceSelect.appendChild(opt);
         });
         ilceSelect.disabled = false;
-      } catch (err) {
+      } else {
         ilceSelect.innerHTML = '<option value="">İlçeler alınamadı</option>';
       }
     });
 
-    // 5. İlçe Seçimi -> Doğrudan Kullanıcı IP'siyle Mahalleleri Getir
+    // 5. İlçe Seçimi (Önce Doğrudan Kullanıcı IP'si, Olmazsa Sunucu)
     ilceSelect.addEventListener('change', async () => {
       const ilceId = ilceSelect.value;
       mahalleSelect.innerHTML = '<option value="">Yükleniyor...</option>';
@@ -485,14 +464,23 @@
         showAdminBoundary(seciliIlce.geometry, 13);
       }
 
+      let data = null;
       try {
-        const res = await fetch(`${TKGM_API}/idariYapi/mahalleListe/${ilceId}`);
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        
-        const rawMahalleler = (data.features || []).map(f => ({
-          id: f.properties.id,
-          ad: f.properties.text,
+        const res = await fetch(`${TKGM_DIRECT_API}/idariYapi/mahalleListe/${ilceId}`);
+        if (res.ok) data = await res.json();
+      } catch (e) {}
+
+      if (!data) {
+        try {
+          const res = await fetch(`/api/mahalleler/${ilceId}`);
+          if (res.ok) data = await res.json();
+        } catch (e) {}
+      }
+
+      if (data) {
+        const rawMahalleler = (data.features || data || []).map(f => ({
+          id: f.properties ? f.properties.id : f.id,
+          ad: f.properties ? f.properties.text : f.ad,
           geometry: f.geometry
         }));
 
@@ -506,12 +494,12 @@
           mahalleSelect.appendChild(opt);
         });
         mahalleSelect.disabled = false;
-      } catch (err) {
+      } else {
         mahalleSelect.innerHTML = '<option value="">Mahalleler alınamadı</option>';
       }
     });
 
-    // 6. Mahalle Seçimi -> Sınır Çiz & Yakınlaş
+    // 6. Mahalle Seçimi
     mahalleSelect.addEventListener('change', () => {
       const mahalleId = mahalleSelect.value;
       if (!mahalleId) return;
@@ -522,7 +510,7 @@
       }
     });
 
-    // 7. Parseli Haritaya Çizme
+    // 7. Parsel Çizme
     function renderParcel(geojson, shouldFly = false) {
       if (!geojson) return null;
 
@@ -539,17 +527,16 @@
 
       const parcelKey = `${mahalle}_${ada}_${parsel}`;
 
-      // Haritada zaten varsa tekrar ekleme
       if (drawnParcelsMap.has(parcelKey)) {
         return props;
       }
 
       const layer = L.geoJSON(geojson, {
         style: {
-          color: '#dc2626',       // Canlı Kırmızı Sınır (TKGM Stili)
+          color: '#dc2626',
           weight: 3.5,
           opacity: 1,
-          fillColor: '#ef4444',   // Şeffaf Kırmızı Dolgu
+          fillColor: '#ef4444',
           fillOpacity: 0.22
         }
       });
@@ -586,7 +573,7 @@
       return props;
     }
 
-    // 8. Parsel Detay Kartı
+    // 8. Detay Modal
     window.showParcelDetails = function(p) {
       const rawAlan = p.alan || p.yuzolcumu || '';
       const formattedAlan = formatAlan(rawAlan);
@@ -603,7 +590,7 @@
       detailModal.style.display = 'block';
     };
 
-    // 9. Arama Butonu ile Sorgulama (Doğrudan Kullanıcı IP'siyle)
+    // 9. Arama Butonundan Sorgu (Önce Kullanıcı IP'si, Olmazsa Sunucu)
     btnSorgula.addEventListener('click', async () => {
       const mahalleId = mahalleSelect.value;
       const ada = adaInput.value.trim() || '0';
@@ -617,25 +604,33 @@
       btnSorgula.innerText = 'Sorgulanıyor...';
       btnSorgula.disabled = true;
 
-      try {
-        const path = (ada === "0" || ada === "") ? `${TKGM_API}/parsel/${mahalleId}/${parsel}` : `${TKGM_API}/parsel/${mahalleId}/${ada}/${parsel}`;
-        const res = await fetch(path);
-        if (!res.ok) throw new Error('Parsel bulunamadı');
-        const data = await res.json();
+      let data = null;
+      const directPath = (ada === "0" || ada === "") ? `${TKGM_DIRECT_API}/parsel/${mahalleId}/${parsel}` : `${TKGM_DIRECT_API}/parsel/${mahalleId}/${ada}/${parsel}`;
 
-        const props = renderParcel(data, true);
-        if (props) {
-          window.showParcelDetails(props);
-        }
-      } catch (err) {
-        alert('Aradığınız parsel bilgisi bulunamadı veya bu parsel mevcut değil.');
-      } finally {
-        btnSorgula.innerText = '🔍 Parseli Sorgula';
-        btnSorgula.disabled = false;
+      try {
+        const res = await fetch(directPath);
+        if (res.ok) data = await res.json();
+      } catch (e) {}
+
+      if (!data) {
+        try {
+          const res = await fetch(`/api/parsel/${mahalleId}/${ada}/${parsel}`);
+          if (res.ok) data = await res.json();
+        } catch (e) {}
       }
+
+      if (data) {
+        const props = renderParcel(data, true);
+        if (props) window.showParcelDetails(props);
+      } else {
+        alert('Aradığınız parsel bilgisi bulunamadı.');
+      }
+
+      btnSorgula.innerText = '🔍 Parseli Sorgula';
+      btnSorgula.disabled = false;
     });
 
-    // 10. Haritadan Tıklama (Doğrudan Kullanıcı IP'siyle)
+    // 10. Haritadan Tıklama (Önce Kullanıcı IP'si, Olmazsa Sunucu)
     map.on('click', async (e) => {
       const lat = e.latlng.lat.toFixed(6);
       const lng = e.latlng.lng.toFixed(6);
@@ -651,11 +646,20 @@
         </div>
       `, { autoPan: false }).openPopup();
 
+      let data = null;
       try {
-        const res = await fetch(`${TKGM_API}/parsel/${lat}/${lng}`);
-        if (!res.ok) throw new Error();
-        const data = await res.json();
+        const res = await fetch(`${TKGM_DIRECT_API}/parsel/${lat}/${lng}`);
+        if (res.ok) data = await res.json();
+      } catch (e) {}
 
+      if (!data) {
+        try {
+          const res = await fetch(`/api/parsel-nokta/${lat}/${lng}`);
+          if (res.ok) data = await res.json();
+        } catch (e) {}
+      }
+
+      if (data) {
         const props = renderParcel(data, false);
         clickMarker.setPopupContent(`
           <div class="tkgm-popup">
@@ -666,7 +670,7 @@
             </button>
           </div>
         `).openPopup();
-      } catch (err) {
+      } else {
         clickMarker.setPopupContent(`
           <div class="tkgm-popup">
             <div class="tkgm-popup-row"><span>Enlem :</span><b>${lat}</b></div>
