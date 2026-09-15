@@ -1,4 +1,3 @@
-sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -143,7 +142,7 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
     .parcel-label {
       background: rgba(15, 23, 42, 0.9) !important;
       color: #ffffff !important;
-      border: 1px solid rgba(255, 255, 255, 0.3) !important;
+      border: 1px solid rgba(255, 255, 255, 0.35) !important;
       border-radius: 6px !important;
       font-weight: 700 !important;
       font-size: 12.5px !important;
@@ -152,6 +151,7 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
       white-space: nowrap !important;
       text-align: center !important;
       line-height: 1.35 !important;
+      pointer-events: none !important;
     }
     .leaflet-tooltip-pane .parcel-label::before {
       border-top-color: rgba(15, 23, 42, 0.9) !important;
@@ -322,6 +322,7 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
     // Çizim Katmanları
     const adminBoundaryGroup = L.featureGroup().addTo(map); // İl / İlçe / Mahalle Sınırları
     const parcelLayerGroup = L.featureGroup().addTo(map);   // Parseller
+    const drawnParcelsMap = new Map(); // Çift eklemeyi engellemek için hafıza
     let clickMarker = null;
 
     // Veri Havuzları
@@ -344,7 +345,7 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
     function showAdminBoundary(geom, maxZoom) {
       if (!geom) return;
       try {
-        adminBoundaryGroup.clearLayers(); // Önceki sınırı kaldır
+        adminBoundaryGroup.clearLayers(); // Önceki idari sınırı kaldır
         
         const boundaryLayer = L.geoJSON(geom, {
           style: {
@@ -470,8 +471,8 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
       }
     });
 
-    // 7. Parseli Haritaya Çizme (Kırmızı TKGM Stili & Tek Parsel Modu)
-    function renderParcel(geojson) {
+    // 7. Parseli Haritaya Çizme (Mükerrer Eklemeyi Önleyen ve Parselleri Koruyan Mantık)
+    function renderParcel(geojson, shouldFly = false) {
       if (!geojson) return null;
 
       const features = geojson.features || (geojson.geometry ? [geojson] : []);
@@ -483,13 +484,19 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
       const ada = props.adaNo || props.ada || '0';
       const parsel = props.parselNo || props.parsel || '';
       const alan = props.alan || props.yuzolcumu || '';
+      const mahalle = props.mahalleAd || props.mahalle || '';
 
-      // Önceki çizilmiş parseli temizle (Üst üste binmeyi engeller!)
-      parcelLayerGroup.clearLayers();
+      // Parsel için benzersiz kimlik (örn: Kurtkoy_4014_3)
+      const parcelKey = `${mahalle}_${ada}_${parsel}`;
+
+      // Bu parsel haritada zaten varsa tekrar ekleyip üst üste bindirme!
+      if (drawnParcelsMap.has(parcelKey)) {
+        return props;
+      }
 
       const layer = L.geoJSON(geojson, {
         style: {
-          color: '#dc2626',       // Canlı Kırmızı Sınır
+          color: '#dc2626',       // Canlı Kırmızı Sınır (TKGM Stili)
           weight: 3.5,
           opacity: 1,
           fillColor: '#ef4444',   // Şeffaf Kırmızı Dolgu
@@ -497,7 +504,7 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
         }
       });
 
-      // Parselin Tam Ortasına Ada / Parsel ve m² Etiketini Yerleştir
+      // Parselin Ortasına Sabit Etiket
       if (parsel) {
         let labelHtml = `<b>${ada} / ${parsel}</b>`;
         if (alan) {
@@ -517,13 +524,16 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
       });
 
       parcelLayerGroup.addLayer(layer);
+      drawnParcelsMap.set(parcelKey, layer);
 
-      // Parsele Yakınlaş
-      map.flyToBounds(layer.getBounds(), {
-        padding: [60, 60],
-        maxZoom: 19,
-        duration: 1.4
-      });
+      // Sadece arama butonuna basıldığında kamerayı uçur (Harita tıklamasında ekran kaymasın)
+      if (shouldFly) {
+        map.flyToBounds(layer.getBounds(), {
+          padding: [60, 60],
+          maxZoom: 19,
+          duration: 1.2
+        });
+      }
 
       return props;
     }
@@ -542,7 +552,7 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
       detailModal.style.display = 'block';
     };
 
-    // 9. Butondan Sorgulama
+    // 9. Arama Butonundan Sorgulama (Burada kamerayı parsele uçuruyoruz)
     btnSorgula.addEventListener('click', async () => {
       const mahalleId = mahalleSelect.value;
       const ada = adaInput.value.trim() || '0';
@@ -561,7 +571,7 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
         if (!res.ok) throw new Error('Parsel bulunamadı');
         const data = await res.json();
 
-        const props = renderParcel(data);
+        const props = renderParcel(data, true); // true: Kamerayı parsele uçur
         if (props) {
           window.showParcelDetails(props);
         }
@@ -573,13 +583,14 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
       }
     });
 
-    // 10. Haritaya Tıklayarak Parsel Bulma
+    // 10. Haritaya Tıklayarak Parsel Bulma (Kamera zıplaması iptal edildi, sabit kalır)
     map.on('click', async (e) => {
       const lat = e.latlng.lat.toFixed(6);
       const lng = e.latlng.lng.toFixed(6);
 
       if (clickMarker) map.removeLayer(clickMarker);
 
+      // autoPan: false sayesinde tıklayınca ekran sağa sola kaymaz!
       clickMarker = L.marker(e.latlng).addTo(map);
       clickMarker.bindPopup(`
         <div class="tkgm-popup">
@@ -587,14 +598,15 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
           <div class="tkgm-popup-row"><span>Boylam:</span><b>${lng}</b></div>
           <div style="color: #64748b; font-size: 11px; margin-top: 4px;">Sınırlar tespit ediliyor...</div>
         </div>
-      `).openPopup();
+      `, { autoPan: false }).openPopup();
 
       try {
         const res = await fetch(`/api/parsel-nokta/${lat}/${lng}`);
         if (!res.ok) throw new Error();
         const data = await res.json();
 
-        const props = renderParcel(data);
+        // renderParcel(data, false) -> false olduğu için ekran sabit kalır, zıplamaz
+        const props = renderParcel(data, false);
         clickMarker.setPopupContent(`
           <div class="tkgm-popup">
             <div class="tkgm-popup-row"><span>Ada / Parsel:</span><b style="color: #dc2626;">${props.adaNo || props.ada || '0'} / ${props.parselNo || props.parsel || '-'}</b></div>
@@ -615,14 +627,14 @@ sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
       }
     });
 
-    // 11. Temizleme Butonu
+    // 11. Temizleme Butonu (Tüm parselleri ve hafızayı temizler)
     btnClear.addEventListener('click', () => {
       parcelLayerGroup.clearLayers();
       adminBoundaryGroup.clearLayers();
+      drawnParcelsMap.clear();
       if (clickMarker) map.removeLayer(clickMarker);
       detailModal.style.display = 'none';
     });
   </script>
 </body>
 </html>
-EOF'
