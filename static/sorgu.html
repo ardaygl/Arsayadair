@@ -1,3 +1,4 @@
+sudo bash -c 'cat << "EOF" > /var/www/arsayadair/static/sorgu.html
 <!DOCTYPE html>
 <html lang="tr">
 <head>
@@ -9,7 +10,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <!-- Google Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://fonts.gstatic.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <style>
@@ -30,7 +31,7 @@
       z-index: 1;
     }
 
-    /* Sol Menü / Panel */
+    /* Sol Menü */
     .sidebar {
       position: absolute;
       top: 16px;
@@ -105,7 +106,7 @@
       gap: 10px;
     }
     .btn-primary {
-      background: #2563eb;
+      background: #dc2626;
       color: #ffffff;
       border: none;
       height: 42px;
@@ -120,7 +121,7 @@
       transition: background 0.2s;
     }
     .btn-primary:hover {
-      background: #1d4ed8;
+      background: #b91c1c;
     }
     .btn-secondary {
       background: #f1f5f9;
@@ -138,22 +139,22 @@
       color: #0f172a;
     }
 
-    /* Parsel Üzerindeki Kalıcı Ada / Parsel Etiketi */
+    /* Parsel Üzerindeki Ada / Parsel Etiketi */
     .parcel-label {
-      background: rgba(15, 23, 42, 0.92) !important;
-      color: #facc15 !important;
-      border: 1.5px solid #eab308 !important;
+      background: rgba(15, 23, 42, 0.9) !important;
+      color: #ffffff !important;
+      border: 1px solid rgba(255, 255, 255, 0.3) !important;
       border-radius: 6px !important;
       font-weight: 700 !important;
-      font-size: 12px !important;
-      padding: 4px 8px !important;
-      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45) !important;
+      font-size: 12.5px !important;
+      padding: 4px 10px !important;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5) !important;
       white-space: nowrap !important;
       text-align: center !important;
-      line-height: 1.3 !important;
+      line-height: 1.35 !important;
     }
     .leaflet-tooltip-pane .parcel-label::before {
-      border-top-color: rgba(15, 23, 42, 0.92) !important;
+      border-top-color: rgba(15, 23, 42, 0.9) !important;
     }
 
     /* Popup Tasarımı */
@@ -295,7 +296,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // 1. Haritayı Başlat (Türkiye Merkezli)
+    // 1. Haritayı Başlat
     const map = L.map('map', {
       zoomControl: false
     }).setView([39.0, 35.2], 6);
@@ -318,8 +319,8 @@
       "Sokak Haritası": osmStreet
     }, null, { position: 'topright' }).addTo(map);
 
-    // Çizim Katman Grupları
-    const adminBoundaryGroup = L.featureGroup().addTo(map); // İl, ilçe, mahalle sınırları
+    // Çizim Katmanları
+    const adminBoundaryGroup = L.featureGroup().addTo(map); // İl / İlçe / Mahalle Sınırları
     const parcelLayerGroup = L.featureGroup().addTo(map);   // Parseller
     let clickMarker = null;
 
@@ -328,7 +329,7 @@
     let ilcelerList = [];
     let mahallelerList = [];
 
-    // Form Referansları
+    // Elementler
     const ilSelect = document.getElementById('ilSelect');
     const ilceSelect = document.getElementById('ilceSelect');
     const mahalleSelect = document.getElementById('mahalleSelect');
@@ -339,7 +340,7 @@
     const detailModal = document.getElementById('detailModal');
     const detailModalBody = document.getElementById('detailModalBody');
 
-    // 2. İl / İlçe / Mahalle Sınırlarını Haritada Çizen ve Yakınlaşan Fonksiyon
+    // 2. DÜZ ÇİZGİLİ İdari Sınır Çizme Fonksiyonu
     function showAdminBoundary(geom, maxZoom) {
       if (!geom) return;
       try {
@@ -347,12 +348,11 @@
         
         const boundaryLayer = L.geoJSON(geom, {
           style: {
-            color: '#38bdf8',       // Kesikli açık mavi sınır çizgisi
-            weight: 2.5,
-            opacity: 0.9,
-            dashArray: '5, 5',       // Kesikli hat efekti
-            fillColor: '#0284c7',   // Çok hafif mavi arka plan dolgusu
-            fillOpacity: 0.08
+            color: '#2563eb',       // Net Mavi DÜZ Sınır Çizgisi
+            weight: 3,
+            opacity: 0.95,
+            fillColor: '#3b82f6',   // Çok hafif mavi dolgu
+            fillOpacity: 0.05
           }
         });
 
@@ -388,7 +388,7 @@
     }
     loadIller();
 
-    // 4. İl Seçilince -> İl Sınırını Çiz, Yakınlaş ve İlçeleri Doldur
+    // 4. İl Seçimi -> Düz Sınır Çiz & Yakınlaş
     ilSelect.addEventListener('change', async () => {
       const ilId = ilSelect.value;
       ilceSelect.innerHTML = '<option value="">Yükleniyor...</option>';
@@ -402,7 +402,6 @@
         return;
       }
 
-      // Seçilen İlin Sınırını Çiz ve Uç
       const seciliIl = illerList.find(i => i.id == ilId);
       if (seciliIl && seciliIl.geometry) {
         showAdminBoundary(seciliIl.geometry, 10);
@@ -426,7 +425,7 @@
       }
     });
 
-    // 5. İlçe Seçilince -> İlçe Sınırını Çiz, Yakınlaş ve Mahalleleri Doldur
+    // 5. İlçe Seçimi -> Düz Sınır Çiz & Yakınlaş
     ilceSelect.addEventListener('change', async () => {
       const ilceId = ilceSelect.value;
       mahalleSelect.innerHTML = '<option value="">Yükleniyor...</option>';
@@ -437,7 +436,6 @@
         return;
       }
 
-      // Seçilen İlçenin Sınırını Çiz ve Uç
       const seciliIlce = ilcelerList.find(i => i.id == ilceId);
       if (seciliIlce && seciliIlce.geometry) {
         showAdminBoundary(seciliIlce.geometry, 13);
@@ -461,7 +459,7 @@
       }
     });
 
-    // 6. Mahalle Seçilince -> Mahalle Sınırını Çiz ve Yakınlaş
+    // 6. Mahalle Seçimi -> Düz Sınır Çiz & Yakınlaş
     mahalleSelect.addEventListener('change', () => {
       const mahalleId = mahalleSelect.value;
       if (!mahalleId) return;
@@ -472,7 +470,7 @@
       }
     });
 
-    // 7. Parseli Haritaya Çizme ve Ortasına Ada/Parsel Etiketi Yapıştırma
+    // 7. Parseli Haritaya Çizme (Kırmızı TKGM Stili & Tek Parsel Modu)
     function renderParcel(geojson) {
       if (!geojson) return null;
 
@@ -486,21 +484,25 @@
       const parsel = props.parselNo || props.parsel || '';
       const alan = props.alan || props.yuzolcumu || '';
 
+      // Önceki çizilmiş parseli temizle (Üst üste binmeyi engeller!)
+      parcelLayerGroup.clearLayers();
+
       const layer = L.geoJSON(geojson, {
         style: {
-          color: '#eab308',     // Altın sarısı parsel sınırı
+          color: '#dc2626',       // Canlı Kırmızı Sınır
           weight: 3.5,
           opacity: 1,
-          fillColor: '#facc15',
-          fillOpacity: 0.4
+          fillColor: '#ef4444',   // Şeffaf Kırmızı Dolgu
+          fillOpacity: 0.22
         }
       });
 
-      // Parselin Tam Ortasına Ada / Parsel Etiketini Sabitle
+      // Parselin Tam Ortasına Ada / Parsel ve m² Etiketini Yerleştir
       if (parsel) {
         let labelHtml = `<b>${ada} / ${parsel}</b>`;
         if (alan) {
-          labelHtml += `<br><span style="font-size: 10px; color: #e2e8f0; font-weight: 500;">${alan} m²</span>`;
+          const formattedAlan = Number(alan).toLocaleString('tr-TR');
+          labelHtml += `<br><span style="font-size: 11px; font-weight: 500; color: #cbd5e1;">${formattedAlan} m²</span>`;
         }
 
         layer.bindTooltip(labelHtml, {
@@ -510,14 +512,13 @@
         }).openTooltip();
       }
 
-      // Parsele Tıklanınca Detay Bilgilerini Aç
       layer.on('click', () => {
         window.showParcelDetails(props);
       });
 
       parcelLayerGroup.addLayer(layer);
 
-      // Kamerayı Parselin Üzerine Uçur
+      // Parsele Yakınlaş
       map.flyToBounds(layer.getBounds(), {
         padding: [60, 60],
         maxZoom: 19,
@@ -532,8 +533,8 @@
       detailModalBody.innerHTML = `
         <div class="tkgm-popup-row"><span>İl / İlçe:</span><b>${p.ilAd || '-'} / ${p.ilceAd || '-'}</b></div>
         <div class="tkgm-popup-row"><span>Mahalle:</span><b>${p.mahalleAd || '-'}</b></div>
-        <div class="tkgm-popup-row"><span>Ada / Parsel:</span><b style="color: #2563eb;">${p.adaNo || p.ada || '0'} / ${p.parselNo || p.parsel || '-'}</b></div>
-        <div class="tkgm-popup-row"><span>Alan:</span><b>${p.alan || p.yuzolcumu ? (p.alan || p.yuzolcumu) + ' m²' : '-'}</b></div>
+        <div class="tkgm-popup-row"><span>Ada / Parsel:</span><b style="color: #dc2626;">${p.adaNo || p.ada || '0'} / ${p.parselNo || p.parsel || '-'}</b></div>
+        <div class="tkgm-popup-row"><span>Alan:</span><b>${p.alan || p.yuzolcumu ? Number(p.alan || p.yuzolcumu).toLocaleString('tr-TR') + ' m²' : '-'}</b></div>
         <div class="tkgm-popup-row"><span>Nitelik:</span><b>${p.nitelik || '-'}</b></div>
         <div class="tkgm-popup-row"><span>Mevkii:</span><b>${p.mevki || p.mevkii || '-'}</b></div>
         <div class="tkgm-popup-row"><span>Pafta:</span><b>${p.pafta || '-'}</b></div>
@@ -541,14 +542,14 @@
       detailModal.style.display = 'block';
     };
 
-    // 9. Buton ile Ada/Parsel Sorgulama
+    // 9. Butondan Sorgulama
     btnSorgula.addEventListener('click', async () => {
       const mahalleId = mahalleSelect.value;
       const ada = adaInput.value.trim() || '0';
       const parsel = parselInput.value.trim();
 
       if (!mahalleId || !parsel) {
-        alert('Lütfen en azından Mahalle ve Parsel numarasını giriniz.');
+        alert('Lütfen Mahalle ve Parsel numarasını giriniz.');
         return;
       }
 
@@ -596,7 +597,7 @@
         const props = renderParcel(data);
         clickMarker.setPopupContent(`
           <div class="tkgm-popup">
-            <div class="tkgm-popup-row"><span>Ada / Parsel:</span><b>${props.adaNo || props.ada || '0'} / ${props.parselNo || props.parsel || '-'}</b></div>
+            <div class="tkgm-popup-row"><span>Ada / Parsel:</span><b style="color: #dc2626;">${props.adaNo || props.ada || '0'} / ${props.parselNo || props.parsel || '-'}</b></div>
             <div class="tkgm-popup-row"><span>Mahalle:</span><b>${props.mahalleAd || '-'}</b></div>
             <button class="tkgm-popup-btn" onclick='window.showParcelDetails(${JSON.stringify(props)})'>
               📋 Detayları Görüntüle
@@ -614,7 +615,7 @@
       }
     });
 
-    // 11. Haritadaki Parselleri ve Sınırları Temizleme
+    // 11. Temizleme Butonu
     btnClear.addEventListener('click', () => {
       parcelLayerGroup.clearLayers();
       adminBoundaryGroup.clearLayers();
@@ -624,3 +625,4 @@
   </script>
 </body>
 </html>
+EOF'
