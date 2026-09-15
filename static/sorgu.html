@@ -713,7 +713,7 @@
       URL.revokeObjectURL(url);
     }
 
-    // --- 1. KML İNDİR (Google Earth) ---
+   // --- 1. KML İNDİR (Google Earth - Referans Dosyayla Birebir Uyumlu) ---
     window.downloadKML = function() {
       if (!currentActiveParcel) return;
       const { props, geojson } = currentActiveParcel;
@@ -722,50 +722,157 @@
 
       const ada = props.adaNo || props.ada || '0';
       const parsel = props.parselNo || props.parsel || '0';
-      const mahalle = props.mahalleAd || 'Parsel';
+      const mahalle = props.mahalleAd || props.mahalle || '';
+      const ilAd = props.ilAd || '';
+      const ilceAd = props.ilceAd || '';
+      const nitelik = props.nitelik || 'Arsa';
+      const pafta = props.pafta || '';
       const alan = formatAlan(props.alan || props.yuzolcumu || '');
 
-      // KML formatı: lng,lat,0 lng,lat,0 ...
-      const kmlCoordString = coords.map(c => `${c[0]},${c},0`).join(' ');
+      // 5 basamaklı temiz koordinat dizisi (lng,lat,0)
+      const kmlCoordString = coords.map(c => `${Number(c[0]).toFixed(5)},${Number(c).toFixed(5)},0`).join(' ');
 
+      // Açıklama: Arsa — 10.613,00 m² (tapu alanı) · İstanbul/Pendik · pafta ...
+      let descParts = [];
+      if (nitelik && alan) {
+        descParts.push(`${nitelik} — ${alan} m² (tapu alanı)`);
+      } else if (alan) {
+        descParts.push(`${alan} m² (tapu alanı)`);
+      } else if (nitelik) {
+        descParts.push(nitelik);
+      }
+
+      if (ilAd || ilceAd) {
+        descParts.push(`${ilAd}/${ilceAd}`);
+      }
+
+      if (pafta) {
+        descParts.push(`pafta ${pafta}`);
+      }
+
+      const description = descParts.join(' · ');
+      const placemarkName = `${mahalle} ${ada}/${parsel}`.trim();
+
+      // Referans KML ile %100 Birebir XML
       const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
-<kml xmlns="http://www.opengis.net/kml/2.2">
-  <Document>
-    <name>${mahalle} ${ada}/${parsel}</name>
-    <Style id="parselStili">
-      <LineStyle>
-        <color>ff1e26dc</color>
-        <width>3</width>
-      </LineStyle>
-      <PolyStyle>
-        <color>401e26dc</color>
-      </PolyStyle>
-    </Style>
-    <Placemark>
-      <name>${ada}/${parsel} (${alan} m²)</name>
-      <description><![CDATA[
-        <b>Mahalle:</b> ${mahalle}<br>
-        <b>Ada/Parsel:</b> ${ada}/${parsel}<br>
-        <b>Alan:</b> ${alan} m²<br>
-        <b>Nitelik:</b> ${props.nitelik || '-'}<br>
-        <b>Pafta:</b> ${props.pafta || '-'}
-      ]]></description>
-      <styleUrl>#parselStili</styleUrl>
-      <Polygon>
-        <outerBoundaryIs>
-          <LinearRing>
-            <coordinates>${kmlCoordString}</coordinates>
-          </LinearRing>
-        </outerBoundaryIs>
-      </Polygon>
-    </Placemark>
-  </Document>
-</kml>`;
+<kml xmlns="http://www.opengis.net/kml/2.2"><Document>
+<name>Parsel sınırları</name>
+<Style id="parsel"><LineStyle><color>ff5a7f1a</color><width>2.5</width></LineStyle><PolyStyle><color>405a7f1a</color></PolyStyle></Style>
+<Placemark><name>${placemarkName}</name><description>${description}</description><styleUrl>#parsel</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>${kmlCoordString}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
+</Document></kml>`;
 
-      triggerDownload(kmlContent, `${mahalle}_${ada}_${parsel}.kml`, 'application/vnd.google-earth.kml+xml');
+      // Dosya adını temizleme (Örn: istanbul_pendik_kurtkoy_ada4014_parsel3.kml)
+      function slug(str) {
+        return (str || '')
+          .replace(/İ/g, 'i').replace(/I/g, 'i').replace(/ı/g, 'i')
+          .replace(/Ğ/g, 'g').replace(/ğ/g, 'g')
+          .replace(/Ü/g, 'u').replace(/ü/g, 'u')
+          .replace(/Ş/g, 's').replace(/ş/g, 's')
+          .replace(/Ö/g, 'o').replace(/ö/g, 'o')
+          .replace(/Ç/g, 'c').replace(/ç/g, 'c')
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '');
+      }
+
+      const filenameParts = [slug(ilAd), slug(ilceAd), slug(mahalle), `ada${ada}`, `parsel${parsel}`].filter(Boolean);
+      const filename = `${filenameParts.join('_')}.kml`;
+
+      triggerDownload(kmlContent, filename, 'application/vnd.google-earth.kml+xml');
     };
 
     // --- 2. KOORDİNAT TXT İNDİR ---
+    function toAscii(str) {
+      return (str || '')
+        .replace(/İ/g, 'I').replace(/ı/g, 'i')
+        .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
+        .replace(/Ü/g, 'U').replace(/ü/g, 'u')
+        .replace(/Ş/g, 'S').replace(/ş/g, 's')
+        .replace(/Ö/g, 'O').replace(/ö/g, 'o')
+        .replace(/Ç/g, 'C').replace(/ç/g, 'c')
+        .replace(/²/g, '2');
+    }
+
+    // --- YARDIMCI 2: Dosya Adı Oluşturucu (istanbul_pendik_kurtkoy_ada4014_parsel3) ---
+    function makeSlug(il, ilce, mahalle, ada, parsel) {
+      function clean(str) {
+        return (str || '')
+          .replace(/İ/g, 'i').replace(/I/g, 'i').replace(/ı/g, 'i')
+          .replace(/Ğ/g, 'g').replace(/ğ/g, 'g')
+          .replace(/Ü/g, 'u').replace(/ü/g, 'u')
+          .replace(/Ş/g, 's').replace(/ş/g, 's')
+          .replace(/Ö/g, 'o').replace(/ö/g, 'o')
+          .replace(/Ç/g, 'c').replace(/ç/g, 'c')
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '');
+      }
+      const parts = [clean(il), clean(ilce), clean(mahalle), `ada${ada}`, `parsel${parsel}`].filter(Boolean);
+      return parts.join('_');
+    }
+
+    // --- YARDIMCI 3: WGS84 -> TÜRKİYE ED50 / UTM (6° Dilim) Metre Dönüşümü ---
+    function wgs84ToED50UTM(lat, lon) {
+      const a_wgs = 6378137.0;
+      const f_wgs = 1.0 / 298.257223563;
+      const a_ed = 6378388.0;
+      const f_ed = 1.0 / 297.0;
+
+      const dx = -87.0;
+      const dy = -98.0;
+      const dz = -121.0;
+
+      const b_wgs = a_wgs * (1.0 - f_wgs);
+      const e2_wgs = (a_wgs * a_wgs - b_wgs * b_wgs) / (a_wgs * a_wgs);
+
+      const da = a_ed - a_wgs;
+      const df = f_ed - f_wgs;
+
+      const phi = lat * Math.PI / 180.0;
+      const lam = lon * Math.PI / 180.0;
+      const sinPhi = Math.sin(phi);
+      const cosPhi = Math.cos(phi);
+      const sinLam = Math.sin(lam);
+      const cosLam = Math.cos(lam);
+
+      const Rn = a_wgs / Math.sqrt(1.0 - e2_wgs * sinPhi * sinPhi);
+      const Rm = a_wgs * (1.0 - e2_wgs) / Math.pow(1.0 - e2_wgs * sinPhi * sinPhi, 1.5);
+
+      const dPhi = (-dx * sinPhi * cosLam - dy * sinPhi * sinLam + dz * cosPhi + (Rn * e2_wgs * sinPhi * cosPhi / a_wgs) * da + sinPhi * cosPhi * (Rm * a_wgs / b_wgs + Rn * b_wgs / a_wgs) * df) / Rm;
+      const dLam = (-dx * sinLam + dy * cosLam) / (Rn * cosPhi);
+
+      const lat_ed = lat + dPhi * 180.0 / Math.PI;
+      const lon_ed = lon + dLam * 180.0 / Math.PI;
+
+      const zone = Math.floor((lon + 180.0) / 6.0) + 1;
+      const lon0 = ((zone - 1) * 6.0 - 180.0 + 3.0) * Math.PI / 180.0;
+      const phi_ed = lat_ed * Math.PI / 180.0;
+      const lam_ed = lon_ed * Math.PI / 180.0;
+
+      const a = 6378388.0;
+      const f = 1.0 / 297.0;
+      const k0 = 0.9996;
+      const e2 = 2.0 * f - f * f;
+      const ep2 = e2 / (1.0 - e2);
+
+      const N = a / Math.sqrt(1.0 - e2 * Math.sin(phi_ed) * Math.sin(phi_ed));
+      const T = Math.tan(phi_ed) * Math.tan(phi_ed);
+      const C = ep2 * Math.cos(phi_ed) * Math.cos(phi_ed);
+      const A = Math.cos(phi_ed) * (lam_ed - lon0);
+
+      const M = a * ((1.0 - e2 / 4.0 - 3.0 * e2 * e2 / 64.0 - 5.0 * e2 * e2 * e2 / 256.0) * phi_ed - (3.0 * e2 / 8.0 + 3.0 * e2 * e2 / 32.0 + 45.0 * e2 * e2 * e2 / 1024.0) * Math.sin(2.0 * phi_ed) + (15.0 * e2 * e2 / 256.0 + 45.0 * e2 * e2 * e2 / 1024.0) * Math.sin(4.0 * phi_ed) - (35.0 * e2 * e2 * e2 / 3072.0) * Math.sin(6.0 * phi_ed));
+
+      const easting = k0 * N * (A + (1.0 - T + C) * Math.pow(A, 3) / 6.0 + (5.0 - 18.0 * T + T * T + 72.0 * C - 58.0 * ep2) * Math.pow(A, 5) / 120.0) + 500000.0;
+      const northing = k0 * (M + N * Math.tan(phi_ed) * (A * A / 2.0 + (5.0 - T + 9.0 * C + 4.0 * C * C) * Math.pow(A, 4) / 24.0 + (61.0 - 58.0 * T + T * T + 600.0 * C - 330.0 * ep2) * Math.pow(A, 6) / 720.0));
+
+      return { y: easting, x: northing, zone: zone };
+    }
+
+    // =========================================================================
+    // 📄 KOORDİNAT (TXT) İNDİRME FONKSİYONU
+    // =========================================================================
     window.downloadTXT = function() {
       if (!currentActiveParcel) return;
       const { props, geojson } = currentActiveParcel;
@@ -774,31 +881,30 @@
 
       const ada = props.adaNo || props.ada || '0';
       const parsel = props.parselNo || props.parsel || '0';
-      const mahalle = props.mahalleAd || '-';
+      const mahalle = toAscii(props.mahalleAd || props.mahalle || 'Parsel');
       const ilAd = props.ilAd || '';
       const ilceAd = props.ilceAd || '';
-      const alan = formatAlan(props.alan || props.yuzolcumu || '');
+      const alan = toAscii(formatAlan(props.alan || props.yuzolcumu || ''));
 
-      let txt = `========================================================\n`;
-      txt += `           PARSEL KÖŞE KOORDİNATLARI (WGS-84 / GPS)      \n`;
-      txt += `========================================================\n`;
-      txt += `İl / İlçe    : ${ilAd} / ${ilceAd}\n`;
-      txt += `Mahalle      : ${mahalle}\n`;
-      txt += `Ada / Parsel : ${ada} / ${parsel}\n`;
-      txt += `Alan         : ${alan} m²\n`;
-      txt += `Nitelik      : ${props.nitelik || '-'}\n`;
-      txt += `Pafta        : ${props.pafta || '-'}\n`;
-      txt += `========================================================\n`;
-      txt += `NO\tENLEM (LAT)\tBOYLAM (LNG)\n`;
-      txt += `--------------------------------------------------------\n`;
+      // Zon belirleme
+      const firstPt = wgs84ToED50UTM(coords[0], coords[0][0]);
+      const zone = firstPt.zone;
 
-      coords.forEach((c, idx) => {
-        txt += `P${idx + 1}\t${c.toFixed(7)}\t${c[0].toFixed(7)}\n`;
+      // Attığın dosyanın birebir başlık ve satır formatı
+      let txt = `# arsayadair.com - parsel kose koordinatlari\n`;
+      txt += `# Sistem: ED50 / UTM Zon ${zone} (6 derecelik dilim)\n`;
+      txt += `# Sutunlar: NoktaNo Y(Dogu) X(Kuzey) Z\n`;
+      txt += `# TKGM halka acik verisi ~1 m cozunurlukludur; resmi olcu yerine gecmez.\n\n`;
+      txt += `# ${mahalle} ${ada}/${parsel} - ${alan} m2 (tapu alani)\n`;
+
+      const uniqueCoords = coords.slice(0, -1);
+      uniqueCoords.forEach((c, idx) => {
+        const pt = wgs84ToED50UTM(c, c[0]);
+        txt += `${idx + 1} ${pt.y.toFixed(3)} ${pt.x.toFixed(3)} 0.000\n`;
       });
-      txt += `========================================================\n`;
-      txt += `Kaynak: TKGM Açık Servisi - arsayadair.com\n`;
 
-      triggerDownload(txt, `${mahalle}_${ada}_${parsel}_koordinatlar.txt`, 'text/plain;charset=utf-8');
+      const filename = `${makeSlug(ilAd, ilceAd, props.mahalleAd, ada, parsel)}.txt`;
+      triggerDownload(txt, filename, 'text/plain;charset=utf-8');
     };
 
     // --- WGS84'TEN METRE BAZLI UTM KOORDİNATA ÇEVİRİCİ (AutoCAD için) ---
@@ -833,33 +939,65 @@
 
       const ada = props.adaNo || props.ada || '0';
       const parsel = props.parselNo || props.parsel || '0';
-      const mahalle = props.mahalleAd || 'Parsel';
+      const mahalle = toAscii(props.mahalleAd || props.mahalle || 'Parsel');
+      const ilAd = props.ilAd || '';
+      const ilceAd = props.ilceAd || '';
+      const alan = toAscii(formatAlan(props.alan || props.yuzolcumu || ''));
 
-      // Koordinatları metreye (UTM) çevir
-      const utmPoints = coords.map(c => latLngToUTM(c, c[0]));
+      // Koordinatları ED50 / UTM'e çevir
+      const utmPts = coords.map(c => wgs84ToED50UTM(c, c[0]));
 
-      // AutoCAD R12 DXF Yapısı
-      let dxf = `0\nSECTION\n2\nHEADER\n0\nENDSEC\n`;
-      dxf += `0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n1\n0\nLAYER\n2\nPARSEL\n70\n0\n62\n1\n6\nCONTINUOUS\n0\nENDTAB\n0\nENDSEC\n`;
+      // Sınır değerleri (EXTMIN / EXTMAX / LIMMIN / LIMMAX)
+      const xs = utmPts.map(p => p.y);
+      const ys = utmPts.map(p => p.x);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+
+      const centerX = (minX + maxX) / 2.0;
+      const centerY = (minY + maxY) / 2.0;
+      const height = Math.max(maxY - minY, maxX - minX, 100.0);
+
+      // Attığın DXF referans dosyasının birebir AC1009 R12 şablonu
+      let dxf = `0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n`;
+      dxf += `9\n$EXTMIN\n10\n${minX.toFixed(3)}\n20\n${minY.toFixed(3)}\n30\n0.0\n`;
+      dxf += `9\n$EXTMAX\n10\n${maxX.toFixed(3)}\n20\n${maxY.toFixed(3)}\n30\n0.0\n`;
+      dxf += `9\n$LIMMIN\n10\n${minX.toFixed(3)}\n20\n${minY.toFixed(3)}\n`;
+      dxf += `9\n$LIMMAX\n10\n${maxX.toFixed(3)}\n20\n${maxY.toFixed(3)}\n0\nENDSEC\n`;
+
+      dxf += `0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nVPORT\n70\n1\n0\nVPORT\n2\n*ACTIVE\n70\n0\n`;
+      dxf += `10\n0.0\n20\n0.0\n11\n1.0\n21\n1.0\n12\n${centerX.toFixed(3)}\n22\n${centerY.toFixed(3)}\n`;
+      dxf += `13\n0.0\n23\n0.0\n14\n1.0\n24\n1.0\n15\n0.0\n25\n0.0\n16\n0.0\n26\n0.0\n36\n1.0\n`;
+      dxf += `17\n0.0\n27\n0.0\n37\n0.0\n40\n${height.toFixed(3)}\n41\n1.8\n42\n50.0\n43\n0.0\n44\n0.0\n50\n0.0\n51\n0.0\n`;
+      dxf += `71\n0\n72\n100\n73\n1\n74\n3\n75\n0\n76\n0\n77\n0\n78\n0\n0\nENDTAB\n`;
+
+      // Katmanlar: PARSEL (Yeşil: 3), YAZI (Sarı: 2)
+      dxf += `0\nTABLE\n2\nLAYER\n70\n2\n`;
+      dxf += `0\nLAYER\n2\nPARSEL\n70\n0\n62\n3\n6\nCONTINUOUS\n`;
+      dxf += `0\nLAYER\n2\nYAZI\n70\n0\n62\n2\n6\nCONTINUOUS\n`;
+      dxf += `0\nENDTAB\n0\nENDSEC\n`;
+
       dxf += `0\nSECTION\n2\nENTITIES\n`;
 
-      // Kapalı Poligon Çizgisi
+      // Kapalı Parsel Poligonu
       dxf += `0\nPOLYLINE\n8\nPARSEL\n66\n1\n70\n1\n`;
-      utmPoints.forEach(p => {
-        dxf += `0\nVERTEX\n8\nPARSEL\n10\n${p.x.toFixed(3)}\n20\n${p.y.toFixed(3)}\n30\n0.000\n`;
+      utmPts.forEach(p => {
+        dxf += `0\nVERTEX\n8\nPARSEL\n10\n${p.y.toFixed(3)}\n20\n${p.x.toFixed(3)}\n30\n0.0\n`;
       });
       dxf += `0\nSEQEND\n`;
 
-      // Parselin ortasına ADA/PARSEL Yazısı Ekle
-      if (utmPoints.length > 0) {
-        const centerX = utmPoints.reduce((s, p) => s + p.x, 0) / utmPoints.length;
-        const centerY = utmPoints.reduce((s, p) => s + p.y, 0) / utmPoints.length;
-        dxf += `0\nTEXT\n8\nPARSEL\n10\n${centerX.toFixed(3)}\n20\n${centerY.toFixed(3)}\n30\n0.000\n40\n5.0\n1\n${ada}/${parsel}\n`;
-      }
+      // Parselin tam ortasındaki iki satır yazı
+      const text1Y = centerY + 3.75;
+      const text2Y = centerY - 3.75;
+
+      dxf += `0\nTEXT\n8\nYAZI\n10\n${centerX.toFixed(3)}\n20\n${text1Y.toFixed(3)}\n30\n0.0\n40\n5.00\n1\n${mahalle} ${ada}/${parsel}\n72\n1\n73\n2\n11\n${centerX.toFixed(3)}\n21\n${text1Y.toFixed(3)}\n31\n0.0\n`;
+      dxf += `0\nTEXT\n8\nYAZI\n10\n${centerX.toFixed(3)}\n20\n${text2Y.toFixed(3)}\n30\n0.0\n40\n5.00\n1\n${alan} m2\n72\n1\n73\n2\n11\n${centerX.toFixed(3)}\n21\n${text2Y.toFixed(3)}\n31\n0.0\n`;
 
       dxf += `0\nENDSEC\n0\nEOF\n`;
 
-      triggerDownload(dxf, `${mahalle}_${ada}_${parsel}.dxf`, 'application/dxf');
+      const filename = `${makeSlug(ilAd, ilceAd, props.mahalleAd, ada, parsel)}.dxf`;
+      triggerDownload(dxf, filename, 'application/dxf');
     };
 
     // 9. Arama Butonu ile Sorgulama
