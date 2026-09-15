@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <!-- TKGM'nin 403 Forbidden basmasını engelleyen gizlilik kalkanı (parselindir.com altyapısı) -->
   <meta name="referrer" content="no-referrer" />
   <title>Parsel Sorgulama - Arsaya Dair</title>
 
@@ -197,13 +196,14 @@
       position: absolute;
       bottom: 20px;
       right: 20px;
-      width: 320px;
+      width: 350px;
+      max-height: 85vh;
       background: #ffffff;
       border-radius: 12px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.25);
+      box-shadow: 0 12px 36px rgba(0,0,0,0.3);
       z-index: 1000;
       display: none;
-      overflow: hidden;
+      overflow-y: auto;
     }
     #detailModal .modal-header {
       background: #0f172a;
@@ -211,8 +211,12 @@
       padding: 12px 16px;
       display: flex;
       justify-content: space-between;
+      align-items: center;
       font-size: 13.5px;
       font-weight: 700;
+      position: sticky;
+      top: 0;
+      z-index: 10;
     }
     #detailModal .modal-body {
       padding: 14px 16px;
@@ -220,6 +224,71 @@
       display: flex;
       flex-direction: column;
       gap: 6px;
+    }
+
+    /* İndirme Butonları Grubu */
+    .export-section {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1.5px dashed #cbd5e1;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .export-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #64748b;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .export-btn-group {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .export-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.2s;
+    }
+    .export-btn-kml {
+      background: #e0f2fe;
+      color: #0369a1;
+      border-color: #bae6fd;
+    }
+    .export-btn-kml:hover {
+      background: #bae6fd;
+    }
+    .export-btn-txt {
+      background: #f1f5f9;
+      color: #334155;
+      border-color: #cbd5e1;
+    }
+    .export-btn-txt:hover {
+      background: #e2e8f0;
+    }
+    .export-btn-dxf {
+      grid-column: span 2;
+      background: #059669;
+      color: #ffffff;
+    }
+    .export-btn-dxf:hover {
+      background: #047857;
+    }
+    .export-note {
+      font-size: 10px;
+      color: #94a3b8;
+      line-height: 1.3;
+      margin-top: 4px;
     }
   </style>
 </head>
@@ -229,7 +298,7 @@
   <div class="sidebar">
     <div class="sidebar-header">
       <h2>Parsel Sorgulama</h2>
-      <span style="font-size: 11px; background: #1e293b; padding: 4px 8px; border-radius: 6px; color: #38bdf8;">Doğrudan TKGM</span>
+      <span style="font-size: 11px; background: #1e293b; padding: 4px 8px; border-radius: 6px; color: #38bdf8;">TKGM Canlı</span>
     </div>
 
     <div class="sidebar-content">
@@ -237,7 +306,6 @@
         💡 <b>İpucu:</b> Haritada herhangi bir yere tıklayarak ada/parsel sınırlarını anında görebilirsiniz.
       </div>
 
-      <!-- İl -->
       <div class="form-group">
         <label for="ilSelect">İl</label>
         <select id="ilSelect" class="form-control">
@@ -245,7 +313,6 @@
         </select>
       </div>
 
-      <!-- İlçe -->
       <div class="form-group">
         <label for="ilceSelect">İlçe</label>
         <select id="ilceSelect" class="form-control" disabled>
@@ -253,7 +320,6 @@
         </select>
       </div>
 
-      <!-- Mahalle -->
       <div class="form-group">
         <label for="mahalleSelect">Mahalle</label>
         <select id="mahalleSelect" class="form-control" disabled>
@@ -261,7 +327,6 @@
         </select>
       </div>
 
-      <!-- Ada / Parsel -->
       <div class="form-row">
         <div class="form-group" style="flex: 1;">
           <label for="adaInput">Ada</label>
@@ -283,26 +348,24 @@
     </div>
   </div>
 
-  <!-- Detay Kartı (Modal) -->
+  <!-- Detay Kartı (Modal + İndirme Butonları) -->
   <div id="detailModal">
     <div class="modal-header">
       <span>Parsel Detay Bilgileri</span>
-      <span style="cursor: pointer;" onclick="document.getElementById('detailModal').style.display='none'">✕</span>
+      <span style="cursor: pointer; font-size: 16px;" onclick="document.getElementById('detailModal').style.display='none'">✕</span>
     </div>
     <div class="modal-body" id="detailModalBody"></div>
   </div>
 
-  <!-- Harita -->
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // Kullanıcının Kendi IP'siyle Bağlandığı Resmi TKGM v3.1 API'si
+    // Kullanıcının Doğrudan Kendi IP'siyle Bağlandığı Resmi TKGM v3.1 API'si
     const TKGM_API = "https://cbsapi.tkgm.gov.tr/megsiswebapi.v3.1/api";
 
-    // 1. Harita Sınırları (Türkiye)
+    // 1. Sadece Türkiye ile Sınırlandırılmış Harita
     const turkeyBounds = L.latLngBounds(
       L.latLng(35.0, 25.0),
       L.latLng(42.8, 45.2)
@@ -338,6 +401,9 @@
     const drawnParcelsMap = new Map();
     let clickMarker = null;
 
+    // Aktif seçili parsel verisi (İndirme işlemleri için)
+    let currentActiveParcel = null;
+
     let illerList = [];
     let ilcelerList = [];
     let mahallelerList = [];
@@ -352,7 +418,7 @@
     const detailModal = document.getElementById('detailModal');
     const detailModalBody = document.getElementById('detailModalBody');
 
-    // Türkçe Alfabetik Sıralama
+    // Türkçe A-Z Sıralama
     function sortTurkish(list) {
       return list.sort((a, b) => (a.ad || a.text || '').localeCompare((b.ad || b.text || ''), 'tr', { sensitivity: 'base' }));
     }
@@ -394,7 +460,7 @@
       }
     }
 
-    // 3. İlleri Getir (Kendi sunucumuz üzerinden, sıfır CORS sorunu)
+    // 3. İlleri Getir (Sunucumuz üzerinden çeker, CORS sorunu yaşanmaz)
     async function loadIller() {
       try {
         const res = await fetch('/api/iller');
@@ -415,7 +481,7 @@
     }
     loadIller();
 
-    // 4. İl Seçimi -> Doğrudan Kullanıcı Kendi IP'siyle İlçeleri Çeker (403 vermez)
+    // 4. İl Seçimi -> Doğrudan Kullanıcı IP'siyle İlçeleri Çeker
     ilSelect.addEventListener('change', async () => {
       const ilId = ilSelect.value;
       ilceSelect.innerHTML = '<option value="">Yükleniyor...</option>';
@@ -435,7 +501,6 @@
       }
 
       try {
-        // no-referrer sayesinde TKGM siteyi bloklamaz, doğrudan kullanıcının IP'sinden alır!
         const res = await fetch(`${TKGM_API}/idariYapi/ilceListe/${ilId}`, { referrerPolicy: 'no-referrer' });
         if (!res.ok) throw new Error();
         const data = await res.json();
@@ -461,7 +526,7 @@
       }
     });
 
-    // 5. İlçe Seçimi -> Doğrudan Kullanıcı Kendi IP'siyle Mahalleleri Çeker
+    // 5. İlçe Seçimi -> Doğrudan Kullanıcı IP'siyle Mahalleleri Çeker
     ilceSelect.addEventListener('change', async () => {
       const ilceId = ilceSelect.value;
       mahalleSelect.innerHTML = '<option value="">Yükleniyor...</option>';
@@ -503,7 +568,7 @@
       }
     });
 
-    // 6. Mahalle Seçimi -> Sınır Çiz & Yakınlaş
+    // 6. Mahalle Seçimi
     mahalleSelect.addEventListener('change', () => {
       const mahalleId = mahalleSelect.value;
       if (!mahalleId) return;
@@ -514,7 +579,7 @@
       }
     });
 
-    // 7. Parseli Çizme
+    // 7. Parsel Çizme
     function renderParcel(geojson, shouldFly = false) {
       if (!geojson) return null;
 
@@ -537,10 +602,10 @@
 
       const layer = L.geoJSON(geojson, {
         style: {
-          color: '#dc2626',
+          color: '#dc2626',       // Canlı Kırmızı Sınır
           weight: 3.5,
           opacity: 1,
-          fillColor: '#ef4444',
+          fillColor: '#ef4444',   // Şeffaf Kırmızı Dolgu
           fillOpacity: 0.22
         }
       });
@@ -560,7 +625,7 @@
       }
 
       layer.on('click', () => {
-        window.showParcelDetails(props);
+        window.showParcelDetails(props, geojson);
       });
 
       parcelLayerGroup.addLayer(layer);
@@ -577,24 +642,227 @@
       return props;
     }
 
-    // 8. Parsel Detay Kartı
-    window.showParcelDetails = function(p) {
+    // 8. Parsel Detay Kartı ve Dışa Aktarma Butonları
+    window.showParcelDetails = function(p, geojson) {
+      currentActiveParcel = { props: p, geojson: geojson };
+
       const rawAlan = p.alan || p.yuzolcumu || '';
       const formattedAlan = formatAlan(rawAlan);
+      const ada = p.adaNo || p.ada || '0';
+      const parsel = p.parselNo || p.parsel || '-';
+      const mahalle = p.mahalleAd || '-';
+      const ilAd = p.ilAd || '';
+      const ilceAd = p.ilceAd || '';
 
       detailModalBody.innerHTML = `
-        <div class="tkgm-popup-row"><span>İl / İlçe:</span><b>${p.ilAd || p.ilceAd ? (p.ilAd || '') + ' / ' + (p.ilceAd || '') : '-'}</b></div>
-        <div class="tkgm-popup-row"><span>Mahalle:</span><b>${p.mahalleAd || '-'}</b></div>
-        <div class="tkgm-popup-row"><span>Ada / Parsel:</span><b style="color: #dc2626;">${p.adaNo || p.ada || '0'} / ${p.parselNo || p.parsel || '-'}</b></div>
+        <div class="tkgm-popup-row"><span>İl / İlçe:</span><b>${ilAd || ilceAd ? ilAd + ' / ' + ilceAd : '-'}</b></div>
+        <div class="tkgm-popup-row"><span>Mahalle:</span><b>${mahalle}</b></div>
+        <div class="tkgm-popup-row"><span>Ada / Parsel:</span><b style="color: #dc2626; font-size: 14px;">${ada} / ${parsel}</b></div>
         <div class="tkgm-popup-row"><span>Alan:</span><b>${formattedAlan ? formattedAlan + ' m²' : '-'}</b></div>
         <div class="tkgm-popup-row"><span>Nitelik:</span><b>${p.nitelik || '-'}</b></div>
         <div class="tkgm-popup-row"><span>Mevkii:</span><b>${p.mevki || p.mevkii || '-'}</b></div>
         <div class="tkgm-popup-row"><span>Pafta:</span><b>${p.pafta || '-'}</b></div>
+
+        <!-- İndirme Bölümü -->
+        <div class="export-section">
+          <span class="export-title">📥 Dışa Aktar & İndir</span>
+          <div class="export-btn-group">
+            <button class="export-btn export-btn-kml" onclick="downloadKML()">
+              🌍 KML İndir
+            </button>
+            <button class="export-btn export-btn-txt" onclick="downloadTXT()">
+              📄 Koordinat (TXT)
+            </button>
+            <button class="export-btn export-btn-dxf" onclick="downloadDXF()">
+              ⬇ DXF İndir (AutoCAD / Netcad)
+            </button>
+          </div>
+          <div class="export-note">
+            AutoCAD, Netcad ve Google Earth ile %100 uyumludur. Koordinatlar TKGM açık servisinden üretilir.
+          </div>
+        </div>
       `;
       detailModal.style.display = 'block';
     };
 
-    // 9. Arama Butonu ile Sorgulama (Doğrudan Kullanıcı IP'si)
+    // --- KOORDİNATLARI ÇIKARMA YARDIMCISI ---
+    function extractCoordinates(geojson) {
+      if (!geojson) return [];
+      const geom = geojson.geometry || (geojson.features && geojson.features[0] ? geojson.features[0].geometry : null);
+      if (!geom) return [];
+
+      let coords = [];
+      if (geom.type === 'Polygon') {
+        coords = geom.coordinates[0]; // Dış halka [[lng, lat], ...]
+      } else if (geom.type === 'MultiPolygon') {
+        coords = geom.coordinates[0][0];
+      }
+      return coords;
+    }
+
+    // --- DOSYA İNDİRME TETİKLEYİCİSİ ---
+    function triggerDownload(content, filename, type) {
+      const blob = new Blob([content], { type: type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // --- 1. KML İNDİR (Google Earth) ---
+    window.downloadKML = function() {
+      if (!currentActiveParcel) return;
+      const { props, geojson } = currentActiveParcel;
+      const coords = extractCoordinates(geojson);
+      if (!coords.length) { alert('Koordinat bilgisi bulunamadı.'); return; }
+
+      const ada = props.adaNo || props.ada || '0';
+      const parsel = props.parselNo || props.parsel || '0';
+      const mahalle = props.mahalleAd || 'Parsel';
+      const alan = formatAlan(props.alan || props.yuzolcumu || '');
+
+      // KML formatı: lng,lat,0 lng,lat,0 ...
+      const kmlCoordString = coords.map(c => `${c[0]},${c},0`).join(' ');
+
+      const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
+<kml xmlns="http://www.opengis.net/kml/2.2">
+  <Document>
+    <name>${mahalle} ${ada}/${parsel}</name>
+    <Style id="parselStili">
+      <LineStyle>
+        <color>ff1e26dc</color>
+        <width>3</width>
+      </LineStyle>
+      <PolyStyle>
+        <color>401e26dc</color>
+      </PolyStyle>
+    </Style>
+    <Placemark>
+      <name>${ada}/${parsel} (${alan} m²)</name>
+      <description><![CDATA[
+        <b>Mahalle:</b> ${mahalle}<br>
+        <b>Ada/Parsel:</b> ${ada}/${parsel}<br>
+        <b>Alan:</b> ${alan} m²<br>
+        <b>Nitelik:</b> ${props.nitelik || '-'}<br>
+        <b>Pafta:</b> ${props.pafta || '-'}
+      ]]></description>
+      <styleUrl>#parselStili</styleUrl>
+      <Polygon>
+        <outerBoundaryIs>
+          <LinearRing>
+            <coordinates>${kmlCoordString}</coordinates>
+          </LinearRing>
+        </outerBoundaryIs>
+      </Polygon>
+    </Placemark>
+  </Document>
+</kml>`;
+
+      triggerDownload(kmlContent, `${mahalle}_${ada}_${parsel}.kml`, 'application/vnd.google-earth.kml+xml');
+    };
+
+    // --- 2. KOORDİNAT TXT İNDİR ---
+    window.downloadTXT = function() {
+      if (!currentActiveParcel) return;
+      const { props, geojson } = currentActiveParcel;
+      const coords = extractCoordinates(geojson);
+      if (!coords.length) { alert('Koordinat bilgisi bulunamadı.'); return; }
+
+      const ada = props.adaNo || props.ada || '0';
+      const parsel = props.parselNo || props.parsel || '0';
+      const mahalle = props.mahalleAd || '-';
+      const ilAd = props.ilAd || '';
+      const ilceAd = props.ilceAd || '';
+      const alan = formatAlan(props.alan || props.yuzolcumu || '');
+
+      let txt = `========================================================\n`;
+      txt += `           PARSEL KÖŞE KOORDİNATLARI (WGS-84 / GPS)      \n`;
+      txt += `========================================================\n`;
+      txt += `İl / İlçe    : ${ilAd} / ${ilceAd}\n`;
+      txt += `Mahalle      : ${mahalle}\n`;
+      txt += `Ada / Parsel : ${ada} / ${parsel}\n`;
+      txt += `Alan         : ${alan} m²\n`;
+      txt += `Nitelik      : ${props.nitelik || '-'}\n`;
+      txt += `Pafta        : ${props.pafta || '-'}\n`;
+      txt += `========================================================\n`;
+      txt += `NO\tENLEM (LAT)\tBOYLAM (LNG)\n`;
+      txt += `--------------------------------------------------------\n`;
+
+      coords.forEach((c, idx) => {
+        txt += `P${idx + 1}\t${c.toFixed(7)}\t${c[0].toFixed(7)}\n`;
+      });
+      txt += `========================================================\n`;
+      txt += `Kaynak: TKGM Açık Servisi - arsayadair.com\n`;
+
+      triggerDownload(txt, `${mahalle}_${ada}_${parsel}_koordinatlar.txt`, 'text/plain;charset=utf-8');
+    };
+
+    // --- WGS84'TEN METRE BAZLI UTM KOORDİNATA ÇEVİRİCİ (AutoCAD için) ---
+    function latLngToUTM(lat, lng) {
+      const a = 6378137.0; // WGS84 büyük yarıçap
+      const f = 1 / 298.257223563;
+      const k0 = 0.9996;
+      const zone = Math.floor((lng + 180) / 6) + 1;
+      const lon0 = ((zone - 1) * 6 - 180 + 3) * Math.PI / 180;
+      const phi = lat * Math.PI / 180;
+      const lam = lng * Math.PI / 180;
+      const e2 = 2 * f - f * f;
+      const ep2 = e2 / (1 - e2);
+      const N = a / Math.sqrt(1 - e2 * Math.sin(phi) * Math.sin(phi));
+      const T = Math.tan(phi) * Math.tan(phi);
+      const C = ep2 * Math.cos(phi) * Math.cos(phi);
+      const A = Math.cos(phi) * (lam - lon0);
+      const M = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * phi - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * phi) + (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * phi) - (35 * e2 * e2 * e2 / 3072) * Math.sin(6 * phi));
+
+      const easting = k0 * N * (A + (1 - T + C) * Math.pow(A, 3) / 6 + (5 - 18 * T + T * T + 72 * C - 58 * ep2) * Math.pow(A, 5) / 120) + 500000;
+      const northing = k0 * (M + N * Math.tan(phi) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * Math.pow(A, 4) / 24 + (61 - 58 * T + T * T + 600 * C - 330 * ep2) * Math.pow(A, 6) / 720));
+
+      return { x: easting, y: northing, zone: zone };
+    }
+
+    // --- 3. DXF İNDİR (AutoCAD / Netcad R12 Formatı) ---
+    window.downloadDXF = function() {
+      if (!currentActiveParcel) return;
+      const { props, geojson } = currentActiveParcel;
+      const coords = extractCoordinates(geojson);
+      if (!coords.length) { alert('Koordinat bilgisi bulunamadı.'); return; }
+
+      const ada = props.adaNo || props.ada || '0';
+      const parsel = props.parselNo || props.parsel || '0';
+      const mahalle = props.mahalleAd || 'Parsel';
+
+      // Koordinatları metreye (UTM) çevir
+      const utmPoints = coords.map(c => latLngToUTM(c, c[0]));
+
+      // AutoCAD R12 DXF Yapısı
+      let dxf = `0\nSECTION\n2\nHEADER\n0\nENDSEC\n`;
+      dxf += `0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n1\n0\nLAYER\n2\nPARSEL\n70\n0\n62\n1\n6\nCONTINUOUS\n0\nENDTAB\n0\nENDSEC\n`;
+      dxf += `0\nSECTION\n2\nENTITIES\n`;
+
+      // Kapalı Poligon Çizgisi
+      dxf += `0\nPOLYLINE\n8\nPARSEL\n66\n1\n70\n1\n`;
+      utmPoints.forEach(p => {
+        dxf += `0\nVERTEX\n8\nPARSEL\n10\n${p.x.toFixed(3)}\n20\n${p.y.toFixed(3)}\n30\n0.000\n`;
+      });
+      dxf += `0\nSEQEND\n`;
+
+      // Parselin ortasına ADA/PARSEL Yazısı Ekle
+      if (utmPoints.length > 0) {
+        const centerX = utmPoints.reduce((s, p) => s + p.x, 0) / utmPoints.length;
+        const centerY = utmPoints.reduce((s, p) => s + p.y, 0) / utmPoints.length;
+        dxf += `0\nTEXT\n8\nPARSEL\n10\n${centerX.toFixed(3)}\n20\n${centerY.toFixed(3)}\n30\n0.000\n40\n5.0\n1\n${ada}/${parsel}\n`;
+      }
+
+      dxf += `0\nENDSEC\n0\nEOF\n`;
+
+      triggerDownload(dxf, `${mahalle}_${ada}_${parsel}.dxf`, 'application/dxf');
+    };
+
+    // 9. Arama Butonu ile Sorgulama
     btnSorgula.addEventListener('click', async () => {
       const mahalleId = mahalleSelect.value;
       const ada = adaInput.value.trim() || '0';
@@ -616,7 +884,7 @@
 
         const props = renderParcel(data, true);
         if (props) {
-          window.showParcelDetails(props);
+          window.showParcelDetails(props, data);
         }
       } catch (err) {
         alert('Aradığınız parsel bilgisi bulunamadı veya bu parsel mevcut değil.');
@@ -626,7 +894,7 @@
       }
     });
 
-    // 10. Haritadan Tıklama (Doğrudan Kullanıcı IP'si)
+    // 10. Haritadan Tıklama
     map.on('click', async (e) => {
       const lat = e.latlng.lat.toFixed(6);
       const lng = e.latlng.lng.toFixed(6);
@@ -652,7 +920,7 @@
           <div class="tkgm-popup">
             <div class="tkgm-popup-row"><span>Ada / Parsel:</span><b style="color: #dc2626;">${props.adaNo || props.ada || '0'} / ${props.parselNo || props.parsel || '-'}</b></div>
             <div class="tkgm-popup-row"><span>Mahalle:</span><b>${props.mahalleAd || '-'}</b></div>
-            <button class="tkgm-popup-btn" onclick='window.showParcelDetails(${JSON.stringify(props)})'>
+            <button class="tkgm-popup-btn" onclick='window.showParcelDetails(${JSON.stringify(props)}, ${JSON.stringify(data)})'>
               📋 Detayları Görüntüle
             </button>
           </div>
@@ -673,6 +941,7 @@
       parcelLayerGroup.clearLayers();
       adminBoundaryGroup.clearLayers();
       drawnParcelsMap.clear();
+      currentActiveParcel = null;
       if (clickMarker) map.removeLayer(clickMarker);
       detailModal.style.display = 'none';
     });
