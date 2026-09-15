@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Ada / Parsel ve Konum Sorgula</title>
+  <title>Ada / Parsel ve Konum Sorgula | Arsaya Dair</title>
   
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
@@ -15,21 +15,85 @@
     .back-btn { color: #94a3b8; text-decoration: none; font-size: 0.85rem; }
     .back-btn:hover { color: #ffffff; }
     .panel-body { padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    
+    .hint-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; padding: 10px 12px; font-size: 0.8rem; color: #1e40af; line-height: 1.4; }
+    
     .form-group { display: flex; flex-direction: column; gap: 6px; }
     label { font-size: 0.8rem; font-weight: 600; color: #475569; }
     select, input { padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.9rem; outline: none; background: #ffffff; }
-    select:focus, input:focus { border-color: #2563eb; }
+    select:focus, input:focus { border-color: #990022; }
     select:disabled, input:disabled { background: #f1f5f9; cursor: not-allowed; }
     .row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .submit-btn { margin-top: 6px; padding: 11px; background: #2563eb; color: white; border: none; border-radius: 6px; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
-    .submit-btn:hover { background: #1d4ed8; }
+    
+    .btn-group { display: flex; flex-direction: column; gap: 8px; margin-top: 6px; }
+    .submit-btn { padding: 11px; background: #990022; color: white; border: none; border-radius: 6px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: background 0.2s; }
+    .submit-btn:hover { background: #7a001b; }
     .submit-btn:disabled { background: #94a3b8; cursor: not-allowed; }
-    #info-card { display: none; border-top: 1px solid #e2e8f0; padding: 18px 20px; background: #f8fafc; }
-    #info-card h3 { font-size: 0.95rem; margin-bottom: 10px; color: #0f172a; }
+    
+    .clear-btn { padding: 9px; background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; }
+    .clear-btn:hover { background: #e2e8f0; color: #0f172a; }
+
+    #info-card { display: none; border-top: 2px solid #990022; padding: 18px 20px; background: #f8fafc; }
+    #info-card h3 { font-size: 0.95rem; margin-bottom: 12px; color: #0f172a; }
     .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; font-size: 0.82rem; }
     .info-item span:first-child { color: #64748b; display: block; font-size: 0.75rem; }
     .info-item span:last-child { font-weight: 600; color: #1e293b; }
+    
     #map { flex: 1; height: 100%; }
+
+    /* ORİJİNAL TKGM ADA/PARSEL YAZI STİLİ */
+    .tkgm-parsel-yazi {
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      color: #ffffff !important;
+      font-weight: 800 !important;
+      font-size: 15px !important;
+      letter-spacing: 0.5px !important;
+      text-shadow: 
+        -1.5px -1.5px 0 #000,  
+         1.5px -1.5px 0 #000,
+        -1.5px  1.5px 0 #000,
+         1.5px  1.5px 0 #000,
+         0px 0px 4px rgba(0,0,0,0.9) !important;
+      pointer-events: none !important;
+      white-space: nowrap !important;
+      padding: 0 !important;
+    }
+    .tkgm-parsel-yazi::before {
+      display: none !important;
+    }
+
+    /* ENLEM / BOYLAM BALONCUĞU */
+    .tkgm-popup {
+      font-family: system-ui, sans-serif;
+      font-size: 12.5px;
+      line-height: 1.5;
+      padding: 2px;
+      min-width: 160px;
+    }
+    .tkgm-popup-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      margin-bottom: 2px;
+      color: #334155;
+    }
+    .tkgm-popup-btn {
+      width: 100%;
+      margin-top: 6px;
+      background: #990022;
+      color: #ffffff;
+      border: none;
+      border-radius: 4px;
+      padding: 6px 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .tkgm-popup-btn:hover {
+      background: #7a001b;
+    }
   </style>
 </head>
 <body>
@@ -41,6 +105,10 @@
     </div>
 
     <div class="panel-body">
+      <div class="hint-box">
+        💡 <b>İpucu:</b> Harita doğrudan <b>yüksek çözünürlüklü uydu görüntüsüyle</b> açılır. İstediğiniz kadar yakınlaşabilirsiniz; görüntü bozulmaz.
+      </div>
+
       <div class="form-group">
         <label for="ilSelect">İl</label>
         <select id="ilSelect">
@@ -73,7 +141,10 @@
         </div>
       </div>
 
-      <button id="sorgulaBtn" class="submit-btn" disabled>Parseli Sorgula</button>
+      <div class="btn-group">
+        <button id="sorgulaBtn" class="submit-btn" disabled>Parseli Sorgula</button>
+        <button id="temizleBtn" class="clear-btn" type="button">🗑️ Haritadaki Parselleri Temizle</button>
+      </div>
     </div>
 
     <div id="info-card">
@@ -95,18 +166,43 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const map = L.map('map', { zoomControl: false }).setView([39.0, 35.0], 6);
+    // Haritayı oluştur (Maksimum zoom seviyesi 21 yapıldı)
+    const map = L.map('map', { 
+      zoomControl: false,
+      maxZoom: 21
+    }).setView([39.0, 35.0], 6);
+    
     L.control.zoom({ position: 'topright' }).addTo(map);
 
-    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(map);
-    const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 19 });
+    // 1. Google Hibrit Uydu (En yüksek çözünürlük + sokak isimleri + zoom 21'e kadar kusursuz) -> VARSAYILAN OLARAK EKLENDİ
+    const googleHybrid = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+      maxZoom: 21,
+      maxNativeZoom: 20,
+      attribution: '&copy; Google Maps'
+    }).addTo(map);
+
+    // 2. Esri Uydu (maxNativeZoom: 18 eklendi, böylece 18'den sonra 'data not available' yazmaz, görüntüyü büyüterek devam eder)
+    const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+      maxZoom: 21,
+      maxNativeZoom: 18,
+      attribution: '&copy; Esri World Imagery'
+    });
+
+    // 3. Standart Sokak Haritası
+    const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 21,
+      maxNativeZoom: 19,
+      attribution: '&copy; OpenStreetMap'
+    });
 
     L.control.layers({
-      "Sokak Haritası (OSM)": osm,
-      "Uydu Görüntüsü (Esri)": esri
+      "Google Uydu (Hibrit)": googleHybrid,
+      "Esri Uydu": esri,
+      "Sokak Haritası (OSM)": osm
     }, null, { position: 'topright' }).addTo(map);
 
-    let currentPolygon = null;
+    const adminBoundaryGroup = L.featureGroup().addTo(map);
+    const parcelsGroup = L.featureGroup().addTo(map);
     let clickMarker = null;
 
     const ilSelect = document.getElementById('ilSelect');
@@ -115,9 +211,37 @@
     const adaInput = document.getElementById('adaInput');
     const parselInput = document.getElementById('parselInput');
     const sorgulaBtn = document.getElementById('sorgulaBtn');
+    const temizleBtn = document.getElementById('temizleBtn');
     const infoCard = document.getElementById('info-card');
 
-    // 1. İlleri Getir
+    let ilceFeaturesMap = {};
+    let mahalleFeaturesMap = {};
+
+    async function zoomAndDrawBoundary(query, fallbackGeometry = null, color = '#f59e0b') {
+      adminBoundaryGroup.clearLayers();
+
+      if (fallbackGeometry) {
+        const layer = L.geoJSON(fallbackGeometry, {
+          style: { color: color, weight: 2, dashArray: '5, 5', fillColor: color, fillOpacity: 0.05 }
+        }).addTo(adminBoundaryGroup);
+        map.fitBounds(layer.getBounds(), { padding: [30, 30] });
+        return;
+      }
+
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query + ', Türkiye')}&format=geojson&polygon_geojson=1&limit=1`);
+        const data = await res.json();
+        if (data.features && data.features.length > 0) {
+          const layer = L.geoJSON(data.features[0], {
+            style: { color: color, weight: 2, dashArray: '5, 5', fillColor: color, fillOpacity: 0.05 }
+          }).addTo(adminBoundaryGroup);
+          map.fitBounds(layer.getBounds(), { padding: [30, 30] });
+        }
+      } catch (e) {
+        console.warn("Sınır çekilemedi:", e);
+      }
+    }
+
     async function loadIller() {
       try {
         const res = await fetch('/api/iller');
@@ -135,81 +259,96 @@
     }
     loadIller();
 
-    // 2. İl Seçilince İlçeleri Getir
     ilSelect.addEventListener('change', async () => {
       const ilId = ilSelect.value;
+      const ilAd = ilSelect.options[ilSelect.selectedIndex]?.text;
+
       resetSelect(ilceSelect, 'İlçe Yükleniyor...');
       resetSelect(mahalleSelect, 'Önce İlçe Seçiniz');
       toggleInputs(false);
 
-      if (!ilId) return resetSelect(ilceSelect, 'Önce İl Seçiniz');
+      if (!ilId) {
+        adminBoundaryGroup.clearLayers();
+        return resetSelect(ilceSelect, 'Önce İl Seçiniz');
+      }
+
+      zoomAndDrawBoundary(ilAd, null, '#f59e0b');
 
       try {
         const res = await fetch(`/api/ilceler/${ilId}`);
-        if (!res.ok) throw new Error();
         const ilceler = await res.json();
         ilceSelect.innerHTML = '<option value="">İlçe Seçiniz...</option>';
         ilceSelect.disabled = false;
+        ilceFeaturesMap = {};
         ilceler.forEach(ilce => {
           const opt = document.createElement('option');
           opt.value = ilce.id;
           opt.textContent = ilce.ad;
           ilceSelect.appendChild(opt);
+          if (ilce.geometry) ilceFeaturesMap[ilce.id] = ilce.geometry;
         });
       } catch (e) {
-        resetSelect(ilceSelect, 'İlçeler Yüklenemedi (Kota / Hata)');
+        resetSelect(ilceSelect, 'İlçeler Yüklenemedi');
       }
     });
 
-    // 3. İlçe Seçilince Mahalleleri Getir
     ilceSelect.addEventListener('change', async () => {
       const ilceId = ilceSelect.value;
+      const ilceAd = ilceSelect.options[ilceSelect.selectedIndex]?.text;
+      const ilAd = ilSelect.options[ilSelect.selectedIndex]?.text;
+
       resetSelect(mahalleSelect, 'Mahalle Yükleniyor...');
       toggleInputs(false);
 
       if (!ilceId) return resetSelect(mahalleSelect, 'Önce İlçe Seçiniz');
 
+      const geom = ilceFeaturesMap[ilceId] || null;
+      zoomAndDrawBoundary(`${ilceAd}, ${ilAd}`, geom, '#ec4899');
+
       try {
         const res = await fetch(`/api/mahalleler/${ilceId}`);
-        if (!res.ok) throw new Error();
         const mahalleler = await res.json();
         mahalleSelect.innerHTML = '<option value="">Mahalle Seçiniz...</option>';
         mahalleSelect.disabled = false;
+        mahalleFeaturesMap = {};
         mahalleler.forEach(m => {
           const opt = document.createElement('option');
           opt.value = m.id;
           opt.textContent = m.ad;
           mahalleSelect.appendChild(opt);
+          if (m.geometry) mahalleFeaturesMap[m.id] = m.geometry;
         });
       } catch (e) {
         resetSelect(mahalleSelect, 'Mahalleler Yüklenemedi');
       }
     });
 
-    mahalleSelect.addEventListener('change', () => toggleInputs(!!mahalleSelect.value));
+    mahalleSelect.addEventListener('change', () => {
+      const mahalleId = mahalleSelect.value;
+      const mahalleAd = mahalleSelect.options[mahalleSelect.selectedIndex]?.text;
+      const ilceAd = ilceSelect.options[ilceSelect.selectedIndex]?.text;
+      const ilAd = ilSelect.options[ilSelect.selectedIndex]?.text;
+
+      toggleInputs(!!mahalleId);
+
+      if (mahalleId) {
+        const geom = mahalleFeaturesMap[mahalleId] || null;
+        zoomAndDrawBoundary(`${mahalleAd}, ${ilceAd}, ${ilAd}`, geom, '#06b6d4');
+      }
+    });
 
     function resetSelect(el, txt) { el.innerHTML = `<option value="">${txt}</option>`; el.disabled = true; }
     function toggleInputs(en) { adaInput.disabled = !en; parselInput.disabled = !en; sorgulaBtn.disabled = !en; }
 
-    // 4. Parsel Çizimi
-    function renderParcel(data) {
-      if (currentPolygon) map.removeLayer(currentPolygon);
+    temizleBtn.addEventListener('click', () => {
+      parcelsGroup.clearLayers();
+      if (clickMarker) map.removeLayer(clickMarker);
+      infoCard.style.display = 'none';
+    });
 
-      const feature = data.type === "FeatureCollection" ? data.features[0] : (data.geometry ? data : null);
-      if (!feature || !feature.geometry) {
-        alert("Parsel geometrisi bulunamadı.");
-        return;
-      }
-
-      currentPolygon = L.geoJSON(feature, {
-        style: { color: '#2563eb', weight: 3, fillColor: '#3b82f6', fillOpacity: 0.35 }
-      }).addTo(map);
-
-      map.fitBounds(currentPolygon.getBounds(), { padding: [50, 50] });
-
-      const p = feature.properties || {};
-      const ada = p.adaNo || p.ada || adaInput.value || '-';
-      const parsel = p.parselNo || p.parsel || parselInput.value || '-';
+    window.showParcelDetails = function(p) {
+      const ada = p.adaNo || p.ada || '-';
+      const parsel = p.parselNo || p.parsel || '-';
 
       document.getElementById('info-il').textContent = p.ilAd || ilSelect.options[ilSelect.selectedIndex]?.text || '-';
       document.getElementById('info-ilce').textContent = p.ilceAd || ilceSelect.options[ilceSelect.selectedIndex]?.text || '-';
@@ -219,12 +358,46 @@
       document.getElementById('info-nitelik').textContent = p.nitelik || '-';
       document.getElementById('info-pafta').textContent = p.pafta || '-';
       document.getElementById('info-mevkii').textContent = p.mevkii || '-';
+      
       infoCard.style.display = 'block';
 
-      return { ada, parsel, alan: p.alan, p };
+      if (p.adaNo) adaInput.value = p.adaNo;
+      if (p.parselNo) parselInput.value = p.parselNo;
+    };
+
+    function addParcelToMap(data, autoOpen = false) {
+      const feature = data.type === "FeatureCollection" ? data.features[0] : (data.geometry ? data : null);
+      if (!feature || !feature.geometry) return null;
+
+      const p = feature.properties || {};
+      const ada = p.adaNo || p.ada || adaInput.value || '0';
+      const parsel = p.parselNo || p.parsel || parselInput.value || '';
+      
+      const labelText = (ada && ada !== '0') ? `${ada}/${parsel}` : `${parsel}`;
+
+      const polygonLayer = L.geoJSON(feature, {
+        style: {
+          color: '#990022',
+          weight: 2.5,
+          fillColor: '#990022',
+          fillOpacity: 0.22
+        }
+      }).addTo(parcelsGroup);
+
+      polygonLayer.bindTooltip(labelText, {
+        permanent: true,
+        direction: 'center',
+        className: 'tkgm-parsel-yazi'
+      });
+
+      if (autoOpen) {
+        map.fitBounds(polygonLayer.getBounds(), { padding: [50, 50] });
+        window.showParcelDetails(p);
+      }
+
+      return { polygonLayer, p };
     }
 
-    // 5. Butonla Sorgula
     sorgulaBtn.addEventListener('click', async () => {
       const mahalleId = mahalleSelect.value;
       const ada = adaInput.value.trim() || "0";
@@ -237,9 +410,9 @@
 
       try {
         const res = await fetch(`/api/parsel/${mahalleId}/${ada}/${parsel}`);
-        if (!res.ok) throw new Error("Parsel bulunamadı veya TKGM sorgu limitiniz aşıldı.");
+        if (!res.ok) throw new Error("Parsel bulunamadı.");
         const data = await res.json();
-        renderParcel(data);
+        addParcelToMap(data, true);
       } catch (err) {
         alert(err.message);
       } finally {
@@ -248,25 +421,47 @@
       }
     });
 
-    // 6. Harita Tıklama
     map.on('click', async (e) => {
       const lat = e.latlng.lat.toFixed(6);
       const lng = e.latlng.lng.toFixed(6);
 
       if (clickMarker) map.removeLayer(clickMarker);
-      clickMarker = L.popup()
-        .setLatLng(e.latlng)
-        .setContent(`<div style="padding: 6px;">📍 ${lat}, ${lng}<br><span style="color:#2563eb;">Parsel sorgulanıyor...</span></div>`)
-        .openOn(map);
+
+      clickMarker = L.marker(e.latlng).addTo(map);
+
+      clickMarker.bindPopup(`
+        <div class="tkgm-popup">
+          <div class="tkgm-popup-row"><span>Enlem :</span><b>${lat}</b></div>
+          <div class="tkgm-popup-row"><span>Boylam:</span><b>${lng}</b></div>
+          <div style="color: #64748b; font-size: 11px; margin-top: 4px;">Sınırlar tespit ediliyor...</div>
+        </div>
+      `).openPopup();
 
       try {
         const res = await fetch(`/api/parsel-nokta/${lat}/${lng}`);
         if (!res.ok) throw new Error();
         const data = await res.json();
-        const info = renderParcel(data);
-        clickMarker.setContent(`<b>${info.p.ilAd || ''} / ${info.p.ilceAd || ''}</b><br>Ada: ${info.ada} | Parsel: ${info.parsel}`);
+        
+        const result = addParcelToMap(data, false);
+        if (result) {
+          clickMarker.setPopupContent(`
+            <div class="tkgm-popup">
+              <div class="tkgm-popup-row"><span>Enlem :</span><b>${lat}</b></div>
+              <div class="tkgm-popup-row"><span>Boylam:</span><b>${lng}</b></div>
+              <button class="tkgm-popup-btn" onclick="window.showParcelDetails(${JSON.stringify(result.p).replace(/"/g, '&quot;')})">
+                📋 Parsel Detaylarını Gör
+              </button>
+            </div>
+          `).openPopup();
+        }
       } catch (err) {
-        clickMarker.setContent('<div style="color:red; padding:4px;">Bu noktada parsel bulunamadı.</div>');
+        clickMarker.setPopupContent(`
+          <div class="tkgm-popup">
+            <div class="tkgm-popup-row"><span>Enlem :</span><b>${lat}</b></div>
+            <div class="tkgm-popup-row"><span>Boylam:</span><b>${lng}</b></div>
+            <div style="color: #dc2626; font-size: 11.5px; margin-top: 4px;">Bu noktada parsel bulunamadı.</div>
+          </div>
+        `).openPopup();
       }
     });
   </script>
