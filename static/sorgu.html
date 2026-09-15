@@ -23,6 +23,7 @@
       width: 100%;
       height: 100%;
       overflow: hidden;
+      background: #0f172a;
     }
     #map {
       width: 100%;
@@ -296,9 +297,18 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-    // 1. Haritayı Başlat
+    // 1. Sadece Türkiye ile Sınırlandırılmış Harita
+    const turkeyBounds = L.latLngBounds(
+      L.latLng(35.0, 25.0), // Güneybatı
+      L.latLng(42.8, 45.2)  // Kuzeydoğu
+    );
+
     const map = L.map('map', {
-      zoomControl: false
+      zoomControl: false,
+      maxBounds: turkeyBounds,
+      maxBoundsViscosity: 1.0, // Haritanın Türkiye dışına sürüklenmesini kilitler
+      minZoom: 6,              // Dünya geneline kadar uzaklaşmayı engeller
+      maxZoom: 20
     }).setView([39.0, 35.2], 6);
 
     L.control.zoom({ position: 'topright' }).addTo(map);
@@ -341,18 +351,37 @@
     const detailModal = document.getElementById('detailModal');
     const detailModalBody = document.getElementById('detailModalBody');
 
+    // Türkçe Alfabeye Göre Sıralama Fonksiyonu (Ç, İ, Ö, Ş, Ü harflerini doğru yere koyar)
+    function sortTurkish(list) {
+      return list.sort((a, b) => (a.ad || '').localeCompare((b.ad || ''), 'tr', { sensitivity: 'base' }));
+    }
+
+    // Güvenli Alan (m²) Formatlama Yardımcısı (NaN Hatasını Engeller)
+    function formatAlan(rawAlan) {
+      if (!rawAlan) return '';
+      let str = String(rawAlan).replace('m²', '').trim();
+      if (str.includes(',')) {
+        return str;
+      }
+      let num = parseFloat(str);
+      if (!isNaN(num)) {
+        return num.toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      return str;
+    }
+
     // 2. DÜZ ÇİZGİLİ İdari Sınır Çizme Fonksiyonu
     function showAdminBoundary(geom, maxZoom) {
       if (!geom) return;
       try {
-        adminBoundaryGroup.clearLayers(); // Önceki idari sınırı kaldır
+        adminBoundaryGroup.clearLayers();
         
         const boundaryLayer = L.geoJSON(geom, {
           style: {
             color: '#2563eb',       // Net Mavi DÜZ Sınır Çizgisi
             weight: 3,
             opacity: 0.95,
-            fillColor: '#3b82f6',   // Çok hafif mavi dolgu
+            fillColor: '#3b82f6',   // Çok hafif saydam dolgu
             fillOpacity: 0.05
           }
         });
@@ -369,12 +398,14 @@
       }
     }
 
-    // 3. İlleri Getir
+    // 3. İlleri Getir ve Türkçe Alfabetik Sırala
     async function loadIller() {
       try {
         const res = await fetch('/api/iller');
         if (!res.ok) throw new Error();
-        illerList = await res.json();
+        const data = await res.json();
+        
+        illerList = sortTurkish(data); // Türkçe A-Z sıralama
         
         ilSelect.innerHTML = '<option value="">İl Seçiniz..</option>';
         illerList.forEach(il => {
@@ -389,7 +420,7 @@
     }
     loadIller();
 
-    // 4. İl Seçimi -> Düz Sınır Çiz & Yakınlaş
+    // 4. İl Seçimi -> Düz Sınır Çiz & İlçeleri Türkçe Sıralı Doldur
     ilSelect.addEventListener('change', async () => {
       const ilId = ilSelect.value;
       ilceSelect.innerHTML = '<option value="">Yükleniyor...</option>';
@@ -411,7 +442,9 @@
       try {
         const res = await fetch(`/api/ilceler/${ilId}`);
         if (!res.ok) throw new Error();
-        ilcelerList = await res.json();
+        const data = await res.json();
+        
+        ilcelerList = sortTurkish(data); // İlçeleri Türkçe A-Z sırala
 
         ilceSelect.innerHTML = '<option value="">İlçe Seçiniz..</option>';
         ilcelerList.forEach(ilce => {
@@ -426,7 +459,7 @@
       }
     });
 
-    // 5. İlçe Seçimi -> Düz Sınır Çiz & Yakınlaş
+    // 5. İlçe Seçimi -> Düz Sınır Çiz & Mahalleleri Türkçe Sıralı Doldur
     ilceSelect.addEventListener('change', async () => {
       const ilceId = ilceSelect.value;
       mahalleSelect.innerHTML = '<option value="">Yükleniyor...</option>';
@@ -445,7 +478,9 @@
       try {
         const res = await fetch(`/api/mahalleler/${ilceId}`);
         if (!res.ok) throw new Error();
-        mahallelerList = await res.json();
+        const data = await res.json();
+        
+        mahallelerList = sortTurkish(data); // Mahalleleri Türkçe A-Z sırala
 
         mahalleSelect.innerHTML = '<option value="">Mahalle Seçiniz..</option>';
         mahallelerList.forEach(m => {
@@ -471,7 +506,7 @@
       }
     });
 
-    // 7. Parseli Haritaya Çizme (Mükerrer Eklemeyi Önleyen ve Parselleri Koruyan Mantık)
+    // 7. Parseli Haritaya Çizme
     function renderParcel(geojson, shouldFly = false) {
       if (!geojson) return null;
 
@@ -483,13 +518,11 @@
 
       const ada = props.adaNo || props.ada || '0';
       const parsel = props.parselNo || props.parsel || '';
-      const alan = props.alan || props.yuzolcumu || '';
+      const rawAlan = props.alan || props.yuzolcumu || '';
       const mahalle = props.mahalleAd || props.mahalle || '';
 
-      // Parsel için benzersiz kimlik (örn: Kurtkoy_4014_3)
       const parcelKey = `${mahalle}_${ada}_${parsel}`;
 
-      // Bu parsel haritada zaten varsa tekrar ekleyip üst üste bindirme!
       if (drawnParcelsMap.has(parcelKey)) {
         return props;
       }
@@ -504,11 +537,10 @@
         }
       });
 
-      // Parselin Ortasına Sabit Etiket
       if (parsel) {
         let labelHtml = `<b>${ada} / ${parsel}</b>`;
-        if (alan) {
-          const formattedAlan = Number(alan).toLocaleString('tr-TR');
+        const formattedAlan = formatAlan(rawAlan);
+        if (formattedAlan) {
           labelHtml += `<br><span style="font-size: 11px; font-weight: 500; color: #cbd5e1;">${formattedAlan} m²</span>`;
         }
 
@@ -526,7 +558,6 @@
       parcelLayerGroup.addLayer(layer);
       drawnParcelsMap.set(parcelKey, layer);
 
-      // Sadece arama butonuna basıldığında kamerayı uçur (Harita tıklamasında ekran kaymasın)
       if (shouldFly) {
         map.flyToBounds(layer.getBounds(), {
           padding: [60, 60],
@@ -540,11 +571,14 @@
 
     // 8. Parsel Detay Kartını Açma
     window.showParcelDetails = function(p) {
+      const rawAlan = p.alan || p.yuzolcumu || '';
+      const formattedAlan = formatAlan(rawAlan);
+
       detailModalBody.innerHTML = `
         <div class="tkgm-popup-row"><span>İl / İlçe:</span><b>${p.ilAd || '-'} / ${p.ilceAd || '-'}</b></div>
         <div class="tkgm-popup-row"><span>Mahalle:</span><b>${p.mahalleAd || '-'}</b></div>
         <div class="tkgm-popup-row"><span>Ada / Parsel:</span><b style="color: #dc2626;">${p.adaNo || p.ada || '0'} / ${p.parselNo || p.parsel || '-'}</b></div>
-        <div class="tkgm-popup-row"><span>Alan:</span><b>${p.alan || p.yuzolcumu ? Number(p.alan || p.yuzolcumu).toLocaleString('tr-TR') + ' m²' : '-'}</b></div>
+        <div class="tkgm-popup-row"><span>Alan:</span><b>${formattedAlan ? formattedAlan + ' m²' : '-'}</b></div>
         <div class="tkgm-popup-row"><span>Nitelik:</span><b>${p.nitelik || '-'}</b></div>
         <div class="tkgm-popup-row"><span>Mevkii:</span><b>${p.mevki || p.mevkii || '-'}</b></div>
         <div class="tkgm-popup-row"><span>Pafta:</span><b>${p.pafta || '-'}</b></div>
@@ -552,7 +586,7 @@
       detailModal.style.display = 'block';
     };
 
-    // 9. Arama Butonundan Sorgulama (Burada kamerayı parsele uçuruyoruz)
+    // 9. Arama Butonundan Sorgulama
     btnSorgula.addEventListener('click', async () => {
       const mahalleId = mahalleSelect.value;
       const ada = adaInput.value.trim() || '0';
@@ -571,7 +605,7 @@
         if (!res.ok) throw new Error('Parsel bulunamadı');
         const data = await res.json();
 
-        const props = renderParcel(data, true); // true: Kamerayı parsele uçur
+        const props = renderParcel(data, true);
         if (props) {
           window.showParcelDetails(props);
         }
@@ -583,14 +617,13 @@
       }
     });
 
-    // 10. Haritaya Tıklayarak Parsel Bulma (Kamera zıplaması iptal edildi, sabit kalır)
+    // 10. Haritaya Tıklayarak Parsel Bulma
     map.on('click', async (e) => {
       const lat = e.latlng.lat.toFixed(6);
       const lng = e.latlng.lng.toFixed(6);
 
       if (clickMarker) map.removeLayer(clickMarker);
 
-      // autoPan: false sayesinde tıklayınca ekran sağa sola kaymaz!
       clickMarker = L.marker(e.latlng).addTo(map);
       clickMarker.bindPopup(`
         <div class="tkgm-popup">
@@ -605,7 +638,6 @@
         if (!res.ok) throw new Error();
         const data = await res.json();
 
-        // renderParcel(data, false) -> false olduğu için ekran sabit kalır, zıplamaz
         const props = renderParcel(data, false);
         clickMarker.setPopupContent(`
           <div class="tkgm-popup">
@@ -627,7 +659,7 @@
       }
     });
 
-    // 11. Temizleme Butonu (Tüm parselleri ve hafızayı temizler)
+    // 11. Temizleme Butonu
     btnClear.addEventListener('click', () => {
       parcelLayerGroup.clearLayers();
       adminBoundaryGroup.clearLayers();
