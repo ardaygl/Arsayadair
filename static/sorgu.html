@@ -403,6 +403,7 @@
 
     // Aktif seçili parsel verisi (İndirme işlemleri için)
     let currentActiveParcel = null;
+    let lastClickedParcelData = null;
 
     let illerList = [];
     let ilcelerList = [];
@@ -700,6 +701,40 @@
       return coords;
     }
 
+    // --- ENLEM & BOYLAM SIRASINI OTOMATİK NORMALİZE EDİCİ ---
+    // TKGM veya GeoJSON'dan gelen nokta dizisinde (c[0], c) hangisinin boylam, hangisinin enlem olduğunu garantiye alır.
+    // Türkiye Sınırları: Enlem ~35.8 - 42.2° N | Boylam ~25.7 - 44.8° E
+    function normalizePoint(c) {
+      const p0 = Number(c[0]);
+      const p1 = Number(c);
+
+      // p0 35.5-42.5 arasında ve p1 25.0-35.5 arasında ise (İstanbul, Ankara, İzmir vb. Batı ve Orta Türkiye):
+      // p0 ENLEM, p1 BOYLAM'dır!
+      if (p0 >= 35.5 && p0 <= 42.5 && p1 >= 25.0 && p1 < 35.5) {
+        return { lat: p0, lon: p1 };
+      }
+      // p1 35.5-42.5 arasında ve p0 25.0-35.5 arasında ise:
+      // p0 BOYLAM, p1 ENLEM'dir (standart GeoJSON).
+      if (p1 >= 35.5 && p1 <= 42.5 && p0 >= 25.0 && p0 < 35.5) {
+        return { lat: p1, lon: p0 };
+      }
+      // Genel durum: GeoJSON varsayılanı c[0] boylam, c enlem
+      return { lat: p1, lon: p0 };
+    }
+
+    // --- XML GÜVENLİ KAÇIŞ YARDIMCISI (&, <, > işaretlerini escape eder) ---
+    function escapeXml(unsafe) {
+      return (unsafe || '').toString().replace(/[<>&'"]/g, function (c) {
+        switch (c) {
+          case '<': return '&lt;';
+          case '>': return '&gt;';
+          case '&': return '&amp;';
+          case '\'': return '&apos;';
+          case '"': return '&quot;';
+        }
+      });
+    }
+
     // --- DOSYA İNDİRME TETİKLEYİCİSİ ---
     function triggerDownload(content, filename, type) {
       const blob = new Blob([content], { type: type });
@@ -713,7 +748,7 @@
       URL.revokeObjectURL(url);
     }
 
-   // --- 1. KML İNDİR (Google Earth - Referans Dosyayla Birebir Uyumlu) ---
+    // --- 1. KML İNDİR (Antarktika Hatası Düzeltildi - Referans Dosyayla Birebir) ---
     window.downloadKML = function() {
       if (!currentActiveParcel) return;
       const { props, geojson } = currentActiveParcel;
@@ -729,10 +764,20 @@
       const pafta = props.pafta || '';
       const alan = formatAlan(props.alan || props.yuzolcumu || '');
 
-      // 5 basamaklı temiz koordinat dizisi (lng,lat,0)
-      const kmlCoordString = coords.map(c => `${Number(c[0]).toFixed(5)},${Number(c).toFixed(5)},0`).join(' ');
+      // Koordinatları kesin olarak {lat, lon} şeklinde normalize et
+      let normCoords = coords.map(normalizePoint);
 
-      // Açıklama: Arsa — 10.613,00 m² (tapu alanı) · İstanbul/Pendik · pafta ...
+      // KML LinearRing poligonunun kapalı olması zorunludur (ilk nokta sonda tekrarlanır)
+      const first = normCoords[0];
+      const last = normCoords[normCoords.length - 1];
+      if (Math.abs(first.lat - last.lat) > 0.000001 || Math.abs(first.lon - last.lon) > 0.000001) {
+        normCoords.push(first);
+      }
+
+      // KML Standardı: KESİNLİKLE boylam,enlem,0 (lon,lat,0)
+      const kmlCoordString = normCoords.map(pt => `${pt.lon.toFixed(5)},${pt.lat.toFixed(5)},0`).join(' ');
+
+      // Açıklama metni
       let descParts = [];
       if (nitelik && alan) {
         descParts.push(`${nitelik} — ${alan} m² (tapu alanı)`);
@@ -750,8 +795,8 @@
         descParts.push(`pafta ${pafta}`);
       }
 
-      const description = descParts.join(' · ');
-      const placemarkName = `${mahalle} ${ada}/${parsel}`.trim();
+      const description = escapeXml(descParts.join(' · '));
+      const placemarkName = escapeXml(`${mahalle} ${ada}/${parsel}`.trim());
 
       // Referans KML ile %100 Birebir XML
       const kmlContent = `<?xml version="1.0" encoding="UTF-8"?>
@@ -761,30 +806,14 @@
 <Placemark><name>${placemarkName}</name><description>${description}</description><styleUrl>#parsel</styleUrl><Polygon><outerBoundaryIs><LinearRing><coordinates>${kmlCoordString}</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark>
 </Document></kml>`;
 
-      // Dosya adını temizleme (Örn: istanbul_pendik_kurtkoy_ada4014_parsel3.kml)
-      function slug(str) {
-        return (str || '')
-          .replace(/İ/g, 'i').replace(/I/g, 'i').replace(/ı/g, 'i')
-          .replace(/Ğ/g, 'g').replace(/ğ/g, 'g')
-          .replace(/Ü/g, 'u').replace(/ü/g, 'u')
-          .replace(/Ş/g, 's').replace(/ş/g, 's')
-          .replace(/Ö/g, 'o').replace(/ö/g, 'o')
-          .replace(/Ç/g, 'c').replace(/ç/g, 'c')
-          .toLowerCase()
-          .replace(/[^a-z0-9]/g, '_')
-          .replace(/_+/g, '_')
-          .replace(/^_|_$/g, '');
-      }
-
-      const filenameParts = [slug(ilAd), slug(ilceAd), slug(mahalle), `ada${ada}`, `parsel${parsel}`].filter(Boolean);
-      const filename = `${filenameParts.join('_')}.kml`;
-
+      const filename = `${makeSlug(ilAd, ilceAd, mahalle, ada, parsel)}.kml`;
       triggerDownload(kmlContent, filename, 'application/vnd.google-earth.kml+xml');
     };
 
-    // --- 2. KOORDİNAT TXT İNDİR ---
+    // --- YARDIMCI 1: ASCII Dönüştürücü (TXT ve DXF için) ---
     function toAscii(str) {
       return (str || '')
+        .toString()
         .replace(/İ/g, 'I').replace(/ı/g, 'i')
         .replace(/Ğ/g, 'G').replace(/ğ/g, 'g')
         .replace(/Ü/g, 'U').replace(/ü/g, 'u')
@@ -794,10 +823,11 @@
         .replace(/²/g, '2');
     }
 
-    // --- YARDIMCI 2: Dosya Adı Oluşturucu (istanbul_pendik_kurtkoy_ada4014_parsel3) ---
+    // --- YARDIMCI 2: Dosya Adı Oluşturucu (istanbul_pendik_seyhli_ada7296_parsel14) ---
     function makeSlug(il, ilce, mahalle, ada, parsel) {
       function clean(str) {
         return (str || '')
+          .toString()
           .replace(/İ/g, 'i').replace(/I/g, 'i').replace(/ı/g, 'i')
           .replace(/Ğ/g, 'g').replace(/ğ/g, 'g')
           .replace(/Ü/g, 'u').replace(/ü/g, 'u')
@@ -871,7 +901,7 @@
     }
 
     // =========================================================================
-    // 📄 KOORDİNAT (TXT) İNDİRME FONKSİYONU
+    // 2. KOORDİNAT (TXT) İNDİRME FONKSİYONU
     // =========================================================================
     window.downloadTXT = function() {
       if (!currentActiveParcel) return;
@@ -886,51 +916,38 @@
       const ilceAd = props.ilceAd || '';
       const alan = toAscii(formatAlan(props.alan || props.yuzolcumu || ''));
 
+      let normCoords = coords.map(normalizePoint);
+      // TXT'de son nokta mükerrer yazılmaz (tekil noktalar listesi)
+      if (normCoords.length > 1) {
+        const f = normCoords[0], l = normCoords[normCoords.length - 1];
+        if (Math.abs(f.lat - l.lat) < 0.000001 && Math.abs(f.lon - l.lon) < 0.000001) {
+          normCoords.pop();
+        }
+      }
+
       // Zon belirleme
-      const firstPt = wgs84ToED50UTM(coords[0], coords[0][0]);
+      const firstPt = wgs84ToED50UTM(normCoords[0].lat, normCoords[0].lon);
       const zone = firstPt.zone;
 
-      // Attığın dosyanın birebir başlık ve satır formatı
+      // Örnek dosyanın birebir başlık ve satır formatı
       let txt = `# arsayadair.com - parsel kose koordinatlari\n`;
       txt += `# Sistem: ED50 / UTM Zon ${zone} (6 derecelik dilim)\n`;
       txt += `# Sutunlar: NoktaNo Y(Dogu) X(Kuzey) Z\n`;
       txt += `# TKGM halka acik verisi ~1 m cozunurlukludur; resmi olcu yerine gecmez.\n\n`;
       txt += `# ${mahalle} ${ada}/${parsel} - ${alan} m2 (tapu alani)\n`;
 
-      const uniqueCoords = coords.slice(0, -1);
-      uniqueCoords.forEach((c, idx) => {
-        const pt = wgs84ToED50UTM(c, c[0]);
-        txt += `${idx + 1} ${pt.y.toFixed(3)} ${pt.x.toFixed(3)} 0.000\n`;
+      normCoords.forEach((pt, idx) => {
+        const utm = wgs84ToED50UTM(pt.lat, pt.lon);
+        txt += `${idx + 1} ${utm.y.toFixed(3)} ${utm.x.toFixed(3)} 0.000\n`;
       });
 
       const filename = `${makeSlug(ilAd, ilceAd, props.mahalleAd, ada, parsel)}.txt`;
       triggerDownload(txt, filename, 'text/plain;charset=utf-8');
     };
 
-    // --- WGS84'TEN METRE BAZLI UTM KOORDİNATA ÇEVİRİCİ (AutoCAD için) ---
-    function latLngToUTM(lat, lng) {
-      const a = 6378137.0; // WGS84 büyük yarıçap
-      const f = 1 / 298.257223563;
-      const k0 = 0.9996;
-      const zone = Math.floor((lng + 180) / 6) + 1;
-      const lon0 = ((zone - 1) * 6 - 180 + 3) * Math.PI / 180;
-      const phi = lat * Math.PI / 180;
-      const lam = lng * Math.PI / 180;
-      const e2 = 2 * f - f * f;
-      const ep2 = e2 / (1 - e2);
-      const N = a / Math.sqrt(1 - e2 * Math.sin(phi) * Math.sin(phi));
-      const T = Math.tan(phi) * Math.tan(phi);
-      const C = ep2 * Math.cos(phi) * Math.cos(phi);
-      const A = Math.cos(phi) * (lam - lon0);
-      const M = a * ((1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 * e2 * e2 / 256) * phi - (3 * e2 / 8 + 3 * e2 * e2 / 32 + 45 * e2 * e2 * e2 / 1024) * Math.sin(2 * phi) + (15 * e2 * e2 / 256 + 45 * e2 * e2 * e2 / 1024) * Math.sin(4 * phi) - (35 * e2 * e2 * e2 / 3072) * Math.sin(6 * phi));
-
-      const easting = k0 * N * (A + (1 - T + C) * Math.pow(A, 3) / 6 + (5 - 18 * T + T * T + 72 * C - 58 * ep2) * Math.pow(A, 5) / 120) + 500000;
-      const northing = k0 * (M + N * Math.tan(phi) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * Math.pow(A, 4) / 24 + (61 - 58 * T + T * T + 600 * C - 330 * ep2) * Math.pow(A, 6) / 720));
-
-      return { x: easting, y: northing, zone: zone };
-    }
-
-    // --- 3. DXF İNDİR (AutoCAD / Netcad R12 Formatı) ---
+    // =========================================================================
+    // 3. DXF İNDİR (AutoCAD / Netcad R12 AC1009 Formatı - Örnekle Birebir)
+    // =========================================================================
     window.downloadDXF = function() {
       if (!currentActiveParcel) return;
       const { props, geojson } = currentActiveParcel;
@@ -944,8 +961,17 @@
       const ilceAd = props.ilceAd || '';
       const alan = toAscii(formatAlan(props.alan || props.yuzolcumu || ''));
 
-      // Koordinatları ED50 / UTM'e çevir
-      const utmPts = coords.map(c => wgs84ToED50UTM(c, c[0]));
+      let normCoords = coords.map(normalizePoint);
+      // Kapalı polylinede son nokta tekilleştirilir (AutoCAD kapalı polyline bayrağı otomatik bağlar)
+      if (normCoords.length > 1) {
+        const f = normCoords[0], l = normCoords[normCoords.length - 1];
+        if (Math.abs(f.lat - l.lat) < 0.000001 && Math.abs(f.lon - l.lon) < 0.000001) {
+          normCoords.pop();
+        }
+      }
+
+      // Koordinatları ED50 / UTM metre bazlı hesapla
+      const utmPts = normCoords.map(pt => wgs84ToED50UTM(pt.lat, pt.lon));
 
       // Sınır değerleri (EXTMIN / EXTMAX / LIMMIN / LIMMAX)
       const xs = utmPts.map(p => p.y);
@@ -959,7 +985,7 @@
       const centerY = (minY + maxY) / 2.0;
       const height = Math.max(maxY - minY, maxX - minX, 100.0);
 
-      // Attığın DXF referans dosyasının birebir AC1009 R12 şablonu
+      // Referans DXF dosyasının birebir AC1009 R12 şablonu
       let dxf = `0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n`;
       dxf += `9\n$EXTMIN\n10\n${minX.toFixed(3)}\n20\n${minY.toFixed(3)}\n30\n0.0\n`;
       dxf += `9\n$EXTMAX\n10\n${maxX.toFixed(3)}\n20\n${maxY.toFixed(3)}\n30\n0.0\n`;
@@ -980,7 +1006,7 @@
 
       dxf += `0\nSECTION\n2\nENTITIES\n`;
 
-      // Kapalı Parsel Poligonu
+      // Kapalı Parsel Poligonu (70: 1 kapalı polyline)
       dxf += `0\nPOLYLINE\n8\nPARSEL\n66\n1\n70\n1\n`;
       utmPts.forEach(p => {
         dxf += `0\nVERTEX\n8\nPARSEL\n10\n${p.y.toFixed(3)}\n20\n${p.x.toFixed(3)}\n30\n0.0\n`;
@@ -1032,7 +1058,7 @@
       }
     });
 
-    // 10. Haritadan Tıklama
+    // 10. Haritadan Tıklama (Tırnak çakışmasından arındırılmış güvenli yapı)
     map.on('click', async (e) => {
       const lat = e.latlng.lat.toFixed(6);
       const lng = e.latlng.lng.toFixed(6);
@@ -1054,11 +1080,13 @@
         const data = await res.json();
 
         const props = renderParcel(data, false);
+        lastClickedParcelData = { props: props, data: data };
+
         clickMarker.setPopupContent(`
           <div class="tkgm-popup">
             <div class="tkgm-popup-row"><span>Ada / Parsel:</span><b style="color: #dc2626;">${props.adaNo || props.ada || '0'} / ${props.parselNo || props.parsel || '-'}</b></div>
             <div class="tkgm-popup-row"><span>Mahalle:</span><b>${props.mahalleAd || '-'}</b></div>
-            <button class="tkgm-popup-btn" onclick='window.showParcelDetails(${JSON.stringify(props)}, ${JSON.stringify(data)})'>
+            <button class="tkgm-popup-btn" onclick='window.showParcelDetails(lastClickedParcelData.props, lastClickedParcelData.data)'>
               📋 Detayları Görüntüle
             </button>
           </div>
@@ -1080,6 +1108,7 @@
       adminBoundaryGroup.clearLayers();
       drawnParcelsMap.clear();
       currentActiveParcel = null;
+      lastClickedParcelData = null;
       if (clickMarker) map.removeLayer(clickMarker);
       detailModal.style.display = 'none';
     });
