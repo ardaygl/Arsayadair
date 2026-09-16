@@ -461,7 +461,7 @@
       }
     }
 
-    // 3. İlleri Getir (Sunucumuz üzerinden çeker, CORS sorunu yaşanmaz)
+    // 3. İlleri Getir
     async function loadIller() {
       try {
         const res = await fetch('/api/iller');
@@ -701,24 +701,16 @@
       return coords;
     }
 
-    // --- ENLEM & BOYLAM SIRASINI OTOMATİK NORMALİZE EDİCİ ---
-    // TKGM veya GeoJSON'dan gelen nokta dizisinde (c[0], c) hangisinin boylam, hangisinin enlem olduğunu garantiye alır.
-    // Türkiye Sınırları: Enlem ~35.8 - 42.2° N | Boylam ~25.7 - 44.8° E
+    // --- ENLEM & BOYLAM SIRASINI OTOMATİK NORMALİZE EDİCİ (NaN HATASI GİDERİLDİ) ---
     function normalizePoint(c) {
       const p0 = Number(c[0]);
-      const p1 = Number(c);
+      const p1 = Number(c[1]); // DÜZELTME: c[1]
 
-      // p0 35.5-42.5 arasında ve p1 25.0-35.5 arasında ise (İstanbul, Ankara, İzmir vb. Batı ve Orta Türkiye):
-      // p0 ENLEM, p1 BOYLAM'dır!
+      // p0 Türkiye enleminde (35.5 - 42.5) ve p1 boylamda (25.0 - 35.5) ise:
       if (p0 >= 35.5 && p0 <= 42.5 && p1 >= 25.0 && p1 < 35.5) {
         return { lat: p0, lon: p1 };
       }
-      // p1 35.5-42.5 arasında ve p0 25.0-35.5 arasında ise:
-      // p0 BOYLAM, p1 ENLEM'dir (standart GeoJSON).
-      if (p1 >= 35.5 && p1 <= 42.5 && p0 >= 25.0 && p0 < 35.5) {
-        return { lat: p1, lon: p0 };
-      }
-      // Genel durum: GeoJSON varsayılanı c[0] boylam, c enlem
+      // Standart GeoJSON sırası: c[0] = boylam, c[1] = enlem
       return { lat: p1, lon: p0 };
     }
 
@@ -1058,7 +1050,7 @@
       }
     });
 
-    // 10. Haritadan Tıklama (Tırnak çakışmasından arındırılmış güvenli yapı)
+    // 10. Haritadan Tıklama
     map.on('click', async (e) => {
       const lat = e.latlng.lat.toFixed(6);
       const lng = e.latlng.lng.toFixed(6);
